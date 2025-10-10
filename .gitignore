@@ -1,0 +1,7 @@
+.vscode/
+
+*.exe
+*.pdb
+*.txt
+*.ilk
+*.spv
