@@ -10,6 +10,11 @@
 #define VERTEX_BUFFERS_INITIAL_LENGTH 8
 #define VERTEX_BUFFERS_STEP           8
 
+typedef struct Vertex {
+    float position[2];
+    u8    color[4];
+} Vertex;
+
 Window*         WINDOW{};
 VkInstance      VK_INSTANCE{};
 VkSurfaceKHR    VK_SURFACE{};
@@ -34,11 +39,6 @@ VkFence     VK_SINGLE_FRAME_FENCE{};
 VkSemaphore VK_SEMAPHORE_IMAGE_READY{};
 VkSemaphore VK_SEMAPHORE_RENDER_FINISHED{};
 
-typedef struct Vertex {
-    float position[2];
-    u8    color[4];
-} Vertex;
-
 double TIME{};
 
 void print_instance_extensions();
@@ -49,26 +49,15 @@ bool create_shader_module(VkDevice device, const char* name, VkShaderModule* sha
 
 int main(int argc, char** argv) {
     const char* name = "Hello";
-    // const s32 fps_lock = 75;
     GlassErrorCode err = glass_create_window(100, 100, 800, 600, name, &WINDOW);
     if (err != GLASS_OK) {
         printf("Cannot create window. %d\n", err);
         return 1;
     }
-    
-    // print_instance_extensions();
-
-    // create vk_instance
-    // u32 instance_extensions_count = 2;
-    // const char* instance_extensions[] = {
-    //     VK_KHR_SURFACE_EXTENSION_NAME,
-    //     VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-    // };
 
     u32 instance_extensions_count;
     const char** instance_extensions = glass_get_vulkan_instance_extensions(&instance_extensions_count);
 
-    // VkInstance           vk_instance {};
     const char* validation_layers[] = {
         "VK_LAYER_KHRONOS_validation"
     };
@@ -146,21 +135,6 @@ int main(int argc, char** argv) {
     }
 
 
-    // create surface
-    // VkSurfaceKHR surface;
-
-    // VkWin32SurfaceCreateInfoKHR surface_info = {};
-
-    // surface_info.sType     = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    // surface_info.pNext     = null;
-    // surface_info.hinstance = glass_win32_get_instance(WINDOW);
-    // surface_info.hwnd      = glass_win32_get_window_handle(WINDOW);
-
-    // result = vkCreateWin32SurfaceKHR(VK_INSTANCE,
-    //                                  &surface_info,
-    //                                  NULL,
-    //                                  &VK_SURFACE);
-
     err = glass_create_vulkan_surface(WINDOW, VK_INSTANCE, &VK_SURFACE);
 
     if (err != GLASS_OK) {
@@ -214,7 +188,6 @@ int main(int argc, char** argv) {
     }
 
     // create logical device
-    // VkDevice device;
     u32   enabled_extensions_count = 1;
     const char* extension_names[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -392,8 +365,6 @@ int main(int argc, char** argv) {
     printf("Present mode: %i\n", present_mode);
     
     // create swapchain
-    // VkSwapchainKHR swapchain = {};
-
     u32 min_image_count = surface_capabilities.minImageCount + 1;
 
     if (min_image_count > surface_capabilities.maxImageCount) {
@@ -442,8 +413,6 @@ int main(int argc, char** argv) {
     printf("Swapchain created.\n");
 
     // create graphics pipeline
-    // VkPipeline pipeline = {};
-
     VkShaderModule vert_shader = {};
     VkShaderModule frag_shader = {};
 
@@ -627,8 +596,6 @@ int main(int argc, char** argv) {
 
     printf("Pipeline layout created.\n");
 
-    // VkRenderPass render_pass = {};
-
     VkAttachmentDescription color_attachment = {
         .flags          = 0,
         .format         = surface_format.format,
@@ -775,8 +742,6 @@ int main(int argc, char** argv) {
     printf("Image views created.\n");
 
     // create frame buffers
-    // VkFramebuffer* frame_buffers;
-
     VK_FRAME_BUFFERS = Calloc(VkFramebuffer, image_count);
 
     for (u32 i = 0; i < image_count; i++) {
@@ -829,8 +794,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // VkCommandBuffer command_buffer;
-
     VkCommandBufferAllocateInfo command_buffer_info = {
         .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .pNext              = NULL,
@@ -849,10 +812,6 @@ int main(int argc, char** argv) {
     }
 
     // sync
-    // VkSemaphore image_ready_semaphore;
-    // VkSemaphore render_finished_semaphore;
-    // VkFence     single_frame_fence;
-
     VkSemaphoreCreateInfo image_ready_semaphore_info = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         .pNext = NULL,
@@ -874,9 +833,6 @@ int main(int argc, char** argv) {
     vkCreateSemaphore(VK_DEVICE, &image_ready_semaphore_info,     NULL, &VK_SEMAPHORE_IMAGE_READY);
     vkCreateSemaphore(VK_DEVICE, &render_finished_semaphore_info, NULL, &VK_SEMAPHORE_RENDER_FINISHED);
     vkCreateFence    (VK_DEVICE, &single_frame_fence_info,        NULL, &VK_SINGLE_FRAME_FENCE);
-
-    // VkQueue  graphics_queue;
-    // VkQueue  present_queue;
 
     vkGetDeviceQueue(VK_DEVICE,
                      graphics_queue_index,
