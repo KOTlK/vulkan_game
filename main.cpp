@@ -6,38 +6,64 @@
 #include <cstdio>
 #include "basic.h"
 #include <cstring>
+#define GAME_MATH_IMPLEMENTATION
+#include "Vector3.h"
+#include "Matrix4.h"
 
 #define VERTEX_BUFFERS_INITIAL_LENGTH 8
 #define VERTEX_BUFFERS_STEP           8
+#define UBO_ALIGNMENT                 256
 
 typedef struct Vertex {
     float position[2];
     u8    color[4];
 } Vertex;
 
-Window*         WINDOW{};
-VkInstance      VK_INSTANCE{};
-VkSurfaceKHR    VK_SURFACE{};
-VkDevice        VK_DEVICE{};
-VkSwapchainKHR  VK_SWAPCHAIN{};
-VkCommandBuffer VK_COMMAND_BUFFER{};
-VkRenderPass    VK_RENDER_PASS{};
-VkFramebuffer*  VK_FRAME_BUFFERS{};
-VkExtent2D      VK_EXTENT{};
-VkPipeline      VK_PIPELINE{};
-VkQueue         VK_GRAPHICS_QUEUE{};
-VkQueue         VK_PRESENT_QUEUE{};
-VkViewport      VK_VIEWPORT{};
-VkRect2D        VK_SCISSORS{};
-VkBuffer*       VERTEX_BUFFERS;
-VkDeviceSize*   OFFSETS;
-VkDeviceMemory* MEMORY;
-u32             VERTEX_BUFFERS_COUNT  = 0;
-u32             VERTEX_BUFFERS_LENGTH = 0;
+typedef struct UniformBuffer {
+    VkBuffer       buffer;
+    VkDeviceMemory mem;
+    void*          mapped;
+} UniformBuffer;
+
+typedef struct ViewProjectionUBO {
+    alignas(16) Matrix4 view;
+    alignas(16) Matrix4 proj;
+} ViewProjectionUBO;
+
+Window*          WINDOW{};
+VkInstance       VK_INSTANCE{};
+VkSurfaceKHR     VK_SURFACE{};
+VkPhysicalDevice VK_PHYS_DEVICE{};
+VkDevice         VK_DEVICE{};
+VkSwapchainKHR   VK_SWAPCHAIN{};
+VkCommandBuffer  VK_COMMAND_BUFFER{};
+VkRenderPass     VK_RENDER_PASS{};
+VkFramebuffer*   VK_FRAME_BUFFERS{};
+VkExtent2D       VK_EXTENT{};
+VkPipeline       VK_PIPELINE{};
+VkPipelineLayout VK_PIPELINE_LAYOUT{};
+VkQueue          VK_GRAPHICS_QUEUE{};
+VkQueue          VK_PRESENT_QUEUE{};
+VkViewport       VK_VIEWPORT{};
+VkRect2D         VK_SCISSORS{};
+VkBuffer*        VERTEX_BUFFERS;
+VkDeviceSize*    OFFSETS;
+VkDeviceMemory*  MEMORY;
+u32              VERTEX_BUFFERS_COUNT  = 0;
+u32              VERTEX_BUFFERS_LENGTH = 0;
+VkDescriptorSetLayout VK_DESCRIPTOR_SET_LAYOUT{};
+UniformBuffer         VIEW_PROJ_UBO;
+UniformBuffer         MODELS;
+VkDescriptorPool      DESCRIPTOR_POOL;
+VkDescriptorSet       DESCRIPTOR_SET;
 
 VkFence     VK_SINGLE_FRAME_FENCE{};
 VkSemaphore VK_SEMAPHORE_IMAGE_READY{};
 VkSemaphore VK_SEMAPHORE_RENDER_FINISHED{};
+
+Matrix4 VIEW;
+Matrix4 PROJECTION;
+Matrix4 MODEL;
 
 double TIME{};
 
@@ -46,9 +72,16 @@ void append_vertex_buffer(VkBuffer buffer, VkDeviceSize offset, VkDeviceMemory m
 void clear_vertex_buffers();
 void destroy_vertex_buffers();
 bool create_shader_module(VkDevice device, const char* name, VkShaderModule* shader_module);
+void create_vertex_buffer(Vertex* vertices, u32 vertex_count);
+void create_descriptor_set_layout(VkDescriptorSetLayout* dsl);
+void create_uniform_buffer(UniformBuffer* ub, u32 size);
+void create_descriptor_set(VkDescriptorSet* descriptor_set);
+void update_view_projection(UniformBuffer* ubo, ViewProjectionUBO* view_proj);
+void update_model(Matrix4 mat);
 
 int main(int argc, char** argv) {
-    const char* name = "Hello";
+    const char* name         = "Hello";
+
     GlassErrorCode err = glass_create_window(100, 100, 800, 600, name, &WINDOW);
     if (err != GLASS_OK) {
         printf("Cannot create window. %d\n", err);
@@ -100,7 +133,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    VkPhysicalDevice phys_device;
+    // VkPhysicalDevice VK_PHYS_DEVICE;
 
     for (u32 i = 0; i < phys_devices_count; i++) {
         u32 extensions_count;
@@ -129,7 +162,7 @@ int main(int argc, char** argv) {
         Free(extension_properties);
 
         if (swapchain_supported) {
-            phys_device = devices[i];
+            VK_PHYS_DEVICE = devices[i];
             break;
         }
     }
@@ -145,11 +178,11 @@ int main(int argc, char** argv) {
     // select graphics and present queues
     u32 family_count;
 
-    vkGetPhysicalDeviceQueueFamilyProperties(phys_device, &family_count, NULL);
+    vkGetPhysicalDeviceQueueFamilyProperties(VK_PHYS_DEVICE, &family_count, NULL);
 
     VkQueueFamilyProperties* family_properties = Calloc(VkQueueFamilyProperties, family_count);
 
-    vkGetPhysicalDeviceQueueFamilyProperties(phys_device, &family_count, family_properties);
+    vkGetPhysicalDeviceQueueFamilyProperties(VK_PHYS_DEVICE, &family_count, family_properties);
 
     bool graphics_queue_found = false;
     bool present_queue_found = false;
@@ -164,7 +197,7 @@ int main(int argc, char** argv) {
         
         VkBool32 present_supported = false;
 
-        vkGetPhysicalDeviceSurfaceSupportKHR(phys_device,
+        vkGetPhysicalDeviceSurfaceSupportKHR(VK_PHYS_DEVICE,
                                              i,
                                              VK_SURFACE,
                                              &present_supported);
@@ -217,7 +250,7 @@ int main(int argc, char** argv) {
             .pEnabledFeatures        = &device_features
         };
 
-        result = vkCreateDevice(phys_device,
+        result = vkCreateDevice(VK_PHYS_DEVICE,
                                 &device_create_info,
                                 NULL,
                                 &VK_DEVICE);
@@ -253,7 +286,7 @@ int main(int argc, char** argv) {
             .pEnabledFeatures        = &device_features
         };
 
-        result = vkCreateDevice(phys_device,
+        result = vkCreateDevice(VK_PHYS_DEVICE,
                                 &device_create_info,
                                 NULL,
                                 &VK_DEVICE);
@@ -267,7 +300,7 @@ int main(int argc, char** argv) {
     // select surface format and present mode
     VkSurfaceCapabilitiesKHR surface_capabilities;
 
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(phys_device,
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VK_PHYS_DEVICE,
                                               VK_SURFACE,
                                               &surface_capabilities);
 
@@ -284,7 +317,7 @@ int main(int argc, char** argv) {
 
     u32 surface_format_count;
     
-    vkGetPhysicalDeviceSurfaceFormatsKHR(phys_device,
+    vkGetPhysicalDeviceSurfaceFormatsKHR(VK_PHYS_DEVICE,
                                          VK_SURFACE,
                                          &surface_format_count,
                                          NULL);
@@ -296,7 +329,7 @@ int main(int argc, char** argv) {
 
     VkSurfaceFormatKHR* surface_formats = Calloc(VkSurfaceFormatKHR, surface_format_count);
 
-    vkGetPhysicalDeviceSurfaceFormatsKHR(phys_device,
+    vkGetPhysicalDeviceSurfaceFormatsKHR(VK_PHYS_DEVICE,
                                          VK_SURFACE,
                                          &surface_format_count,
                                          surface_formats);
@@ -319,7 +352,7 @@ int main(int argc, char** argv) {
     
     u32 present_mode_count;
 
-    vkGetPhysicalDeviceSurfacePresentModesKHR(phys_device,
+    vkGetPhysicalDeviceSurfacePresentModesKHR(VK_PHYS_DEVICE,
                                               VK_SURFACE,
                                               &present_mode_count,
                                               NULL);
@@ -331,7 +364,7 @@ int main(int argc, char** argv) {
     
     VkPresentModeKHR* present_modes = Calloc(VkPresentModeKHR, present_mode_count);
 
-    vkGetPhysicalDeviceSurfacePresentModesKHR(phys_device,
+    vkGetPhysicalDeviceSurfacePresentModesKHR(VK_PHYS_DEVICE,
                                               VK_SURFACE,
                                               &present_mode_count,
                                               present_modes);
@@ -572,14 +605,29 @@ int main(int argc, char** argv) {
         .pDynamicStates    = dynamic_states
     };
 
-    VkPipelineLayout pipeline_layout = {};
+    // VkPipelineLayout pipeline_layout = {};
+
+    Vertex vertices[] = {
+        {{ -0.5f,  0.5f }, { 255, 0,   0,   255 }},
+        {{  0.5f,  0.5f }, { 0,   255, 0,   255 }},
+        {{  0.0f, -0.5f }, { 0,   0,   255, 255 }},
+    };
+
+    create_vertex_buffer(vertices, 3);
+    create_descriptor_set_layout(&VK_DESCRIPTOR_SET_LAYOUT);
+    create_uniform_buffer(&VIEW_PROJ_UBO, sizeof(ViewProjectionUBO));
+
+    u32 model_size = 1 * UBO_ALIGNMENT;
+    create_uniform_buffer(&MODELS, model_size);
+
+    create_descriptor_set(&DESCRIPTOR_SET);
 
     VkPipelineLayoutCreateInfo layout_info = {
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext                  = NULL,
         .flags                  = 0,
-        .setLayoutCount         = 0,
-        .pSetLayouts            = NULL,
+        .setLayoutCount         = 1,
+        .pSetLayouts            = &VK_DESCRIPTOR_SET_LAYOUT,
         .pushConstantRangeCount = 0,
         .pPushConstantRanges    = NULL
     };
@@ -587,7 +635,7 @@ int main(int argc, char** argv) {
     result = vkCreatePipelineLayout(VK_DEVICE,
                                     &layout_info,
                                     NULL,
-                                    &pipeline_layout);
+                                    &VK_PIPELINE_LAYOUT);
 
     if (result != VK_SUCCESS) {
         printf("Cannot create pipeline layout. %d", result);
@@ -658,7 +706,7 @@ int main(int argc, char** argv) {
         .pDepthStencilState  = NULL,
         .pColorBlendState    = &color_blend_info,
         .pDynamicState       = &dynamic_info,
-        .layout              = pipeline_layout,
+        .layout              = VK_PIPELINE_LAYOUT,
         .renderPass          = VK_RENDER_PASS,
         .subpass             = 0,
         .basePipelineHandle  = VK_NULL_HANDLE,
@@ -844,56 +892,25 @@ int main(int argc, char** argv) {
                      0,
                      &VK_PRESENT_QUEUE);
 
-    Vertex vertices[] = {
-        {{ -0.5f,  0.5f }, { 255, 0,   0,   255 }},
-        {{  0.5f,  0.5f }, { 0,   255, 0,   255 }},
-        {{  0.0f, -0.5f }, { 0,   0,   255, 255 }},
+    float camera_position[2] = {0, 0};
+    float camera_width       = 4;
+    float camera_height      = 3;
+    float left               = camera_position[0] - camera_width;
+    float right              = camera_position[0] + camera_width;
+    float top                = camera_position[1] + camera_height;
+    float bottom             = camera_position[1] - camera_height;
+
+    VIEW       = matrix4_transform_2d(-camera_position[0], -camera_position[1]);
+    PROJECTION = matrix4_ortho_2d(left, right, top, bottom);
+    MODEL      = matrix4_trs_2d(0, 0, 0, 4, 1.5f);
+
+    ViewProjectionUBO view_proj = {
+        .view = VIEW,
+        .proj = PROJECTION
     };
 
-    VkBufferCreateInfo buffer_info = {
-        .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size        = sizeof(vertices[0]) * 3,
-        .usage       = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
-    };
-
-    VkBuffer vertex_buffer;
-    vkCreateBuffer(VK_DEVICE, &buffer_info, NULL, &vertex_buffer);
-
-    VkMemoryRequirements mem_requirements;
-    vkGetBufferMemoryRequirements(VK_DEVICE, vertex_buffer, &mem_requirements);
-
-    VkPhysicalDeviceMemoryProperties mem_properties;
-    vkGetPhysicalDeviceMemoryProperties(phys_device, &mem_properties);
-    
-    u32 mem_type_index = 0;
-    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | 
-                                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
-    for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++) {
-        if ((mem_requirements.memoryTypeBits & (1 << i)) && 
-            (mem_properties.memoryTypes[i].propertyFlags & properties) == properties) {
-            mem_type_index = i;
-            break;
-        }
-    }
-
-    VkMemoryAllocateInfo alloc_info = {
-        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .allocationSize  = mem_requirements.size,
-        .memoryTypeIndex = mem_type_index
-    };
-
-    VkDeviceMemory memory;
-    vkAllocateMemory(VK_DEVICE, &alloc_info, NULL, &memory);
-
-    vkBindBufferMemory(VK_DEVICE, vertex_buffer, memory, 0);
-
-    void* data;
-    vkMapMemory(VK_DEVICE, memory, 0, buffer_info.size, 0, &data);
-    memcpy(data, vertices, buffer_info.size);
-    vkUnmapMemory(VK_DEVICE, memory);
-    append_vertex_buffer(vertex_buffer, 0, memory);
+    update_view_projection(&VIEW_PROJ_UBO, &view_proj);
+    update_model(MODEL);
 
     TIME = glass_get_time();
 
@@ -911,22 +928,18 @@ int main(int argc, char** argv) {
         glass_main_loop();
     }
 
-    VkSemaphore semaphores[] = {VK_SEMAPHORE_IMAGE_READY, VK_SEMAPHORE_RENDER_FINISHED};
-    u64 wait[] = {u64_max, u64_max};
-
-    VkSemaphoreWaitInfo wait_info = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .pNext = NULL,
-        .flags = 0,
-        .semaphoreCount = 2,
-        .pSemaphores = semaphores,
-        .pValues = wait
-    };
-
     printf("Exit begin.\n");
 
-    vkWaitSemaphores(VK_DEVICE, &wait_info, u64_max);
-    vkWaitForFences(VK_DEVICE, 1, &VK_SINGLE_FRAME_FENCE, VK_TRUE, u64_max);
+    vkDeviceWaitIdle(VK_DEVICE);
+
+    destroy_vertex_buffers();
+    vkDestroyDescriptorPool(VK_DEVICE, DESCRIPTOR_POOL, NULL);
+    vkDestroyDescriptorSetLayout(VK_DEVICE, VK_DESCRIPTOR_SET_LAYOUT, NULL);
+    vkDestroyBuffer(VK_DEVICE, VIEW_PROJ_UBO.buffer, NULL);
+    vkFreeMemory(VK_DEVICE, VIEW_PROJ_UBO.mem, NULL);
+
+    vkDestroyBuffer(VK_DEVICE, MODELS.buffer, NULL);
+    vkFreeMemory(VK_DEVICE, MODELS.mem, NULL);
     
     vkDestroySemaphore(VK_DEVICE, VK_SEMAPHORE_IMAGE_READY, NULL);
     vkDestroySemaphore(VK_DEVICE, VK_SEMAPHORE_RENDER_FINISHED, NULL);
@@ -940,7 +953,7 @@ int main(int argc, char** argv) {
     }
 
     vkDestroyPipeline(VK_DEVICE, VK_PIPELINE, NULL);
-    vkDestroyPipelineLayout(VK_DEVICE, pipeline_layout, NULL);
+    vkDestroyPipelineLayout(VK_DEVICE, VK_PIPELINE_LAYOUT, NULL);
     vkDestroyRenderPass(VK_DEVICE, VK_RENDER_PASS, NULL);
     vkDestroyShaderModule(VK_DEVICE, vert_shader, NULL);
     vkDestroyShaderModule(VK_DEVICE, frag_shader, NULL);
@@ -952,6 +965,72 @@ int main(int argc, char** argv) {
     vkDestroyInstance(VK_INSTANCE, null);
 
     glass_destroy_window(WINDOW);
+
+    Vector3 a = {.x = 1, .y = 2, .z = 3};
+    Vector3 b = {.x = 3, .y = 2, .z = 1};
+
+    // Vector3 c = a + b;
+    a += b;
+
+    Matrix4 mat = matrix4_make(1, 2, 3, 4,
+                               5, 6, 7, 8,
+                               9, 10, 11, 12,
+                               13, 14, 15, 16);
+
+    Matrix4 mat2 = matrix4_make(1, 2, 3, 4,
+                                5, 6, 7, 8,
+                                9, 10, 11, 12,
+                                13, 14, 15, 16);
+
+    printf("(%f, %f, %f)\n", a.x, a.y, a.z);
+
+    for (u32 i = 0; i < 16; i++) {
+        if (i % 4 == 0) printf("\n");
+
+        printf("%f,", mat.e[i]);
+    }
+
+    printf("\n");
+
+    for (u32 i = 0; i < 16; i++) {
+        if (i % 4 == 0) printf("\n");
+
+        printf("%f,", mat2.e[i]);
+    }
+    printf("\n");
+
+    Matrix4 mat3 = matrix4_add(&mat, &mat2);
+
+    for (u32 i = 0; i < 16; i++) {
+        if (i % 4 == 0) printf("\n");
+
+        printf("%f,", mat3.e[i]);
+    }
+    printf("\n");
+
+    mat3 = matrix4_sub(&mat3, &mat2);
+
+    for (u32 i = 0; i < 16; i++) {
+        if (i % 4 == 0) printf("\n");
+
+        printf("%f,", mat3.e[i]);
+    }
+    printf("\n");
+
+    mat3 = matrix4_mul(&mat, &mat2);
+
+    for (u32 i = 0; i < 16; i++) {
+        if (i % 4 == 0) printf("\n");
+
+        printf("%f,", mat3.e[i]);
+    }
+    printf("\n");
+
+    float det = matrix4_det(&mat);
+
+    printf("%f\n", det);
+
+    printf("\n");
 
     return 0;
 }
@@ -1006,6 +1085,8 @@ GlassErrorCode glass_render() {
 
     printf("Binding %d buffers\n", VERTEX_BUFFERS_COUNT);
     vkCmdBindVertexBuffers(VK_COMMAND_BUFFER, 0, VERTEX_BUFFERS_COUNT, VERTEX_BUFFERS, OFFSETS);
+    u32 dynamic_offset = 0 * UBO_ALIGNMENT;
+    vkCmdBindDescriptorSets(VK_COMMAND_BUFFER, VK_PIPELINE_BIND_POINT_GRAPHICS, VK_PIPELINE_LAYOUT, 0, 1, &DESCRIPTOR_SET, 1, &dynamic_offset);
 
     vkCmdDraw(VK_COMMAND_BUFFER, 3, 1, 0, 0);
     
@@ -1173,4 +1254,198 @@ void destroy_vertex_buffers() {
     Free(VERTEX_BUFFERS);
     Free(OFFSETS);
     Free(MEMORY);
+}
+
+void create_vertex_buffer(Vertex* vertices, u32 vertex_count) {
+    VkBufferCreateInfo buffer_info = {
+        .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size        = sizeof(vertices[0]) * vertex_count,
+        .usage       = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+    };
+
+    VkBuffer vertex_buffer;
+    vkCreateBuffer(VK_DEVICE, &buffer_info, NULL, &vertex_buffer);
+
+    VkMemoryRequirements mem_requirements;
+    vkGetBufferMemoryRequirements(VK_DEVICE, vertex_buffer, &mem_requirements);
+
+    VkPhysicalDeviceMemoryProperties mem_properties;
+    vkGetPhysicalDeviceMemoryProperties(VK_PHYS_DEVICE, &mem_properties);
+    
+    u32 mem_type_index = 0;
+    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | 
+                                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++) {
+        if ((mem_requirements.memoryTypeBits & (1 << i)) && 
+            (mem_properties.memoryTypes[i].propertyFlags & properties) == properties) {
+            mem_type_index = i;
+            break;
+        }
+    }
+
+    VkMemoryAllocateInfo alloc_info = {
+        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize  = mem_requirements.size,
+        .memoryTypeIndex = mem_type_index
+    };
+
+    VkDeviceMemory memory;
+    vkAllocateMemory(VK_DEVICE, &alloc_info, NULL, &memory);
+
+    vkBindBufferMemory(VK_DEVICE, vertex_buffer, memory, 0);
+
+    void* data;
+    vkMapMemory(VK_DEVICE, memory, 0, buffer_info.size, 0, &data);
+    memcpy(data, vertices, buffer_info.size);
+    vkUnmapMemory(VK_DEVICE, memory);
+    append_vertex_buffer(vertex_buffer, 0, memory);
+}
+
+void create_descriptor_set_layout(VkDescriptorSetLayout* dsl) {
+    VkDescriptorSetLayoutBinding bindings[2] = {};
+    
+    // Binding 0: View/Projection UBO
+    bindings[0] = {
+        .binding            = 0,
+        .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount    = 1,
+        .stageFlags         = VK_SHADER_STAGE_VERTEX_BIT,
+        .pImmutableSamplers = NULL,
+    };
+    
+    
+    // Binding 1: Dynamic Model Matrix UBO
+    bindings[1] = {
+        .binding            = 1,
+        .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+        .descriptorCount    = 1,
+        .stageFlags         = VK_SHADER_STAGE_VERTEX_BIT,
+        .pImmutableSamplers = NULL,
+    };
+
+    VkDescriptorSetLayoutCreateInfo layout_info = {
+        .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 2,
+        .pBindings    = bindings
+    };
+
+    vkCreateDescriptorSetLayout(VK_DEVICE, &layout_info, NULL, dsl);
+}
+
+void create_uniform_buffer(UniformBuffer* ub, u32 size) {
+    VkBufferCreateInfo buffer_info = {
+        .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size        = size,
+        .usage       = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+    };
+
+    vkCreateBuffer(VK_DEVICE, &buffer_info, NULL, &ub->buffer);
+
+    VkMemoryRequirements mem_req;
+    vkGetBufferMemoryRequirements(VK_DEVICE, ub->buffer, &mem_req);
+
+    VkMemoryAllocateInfo alloc_info = {
+        .sType          = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = mem_req.size
+    };
+    
+    VkPhysicalDeviceMemoryProperties mem_props;
+    vkGetPhysicalDeviceMemoryProperties(VK_PHYS_DEVICE, &mem_props);
+    
+    uint32_t mem_type_index = -1;
+    for (uint32_t i = 0; i < mem_props.memoryTypeCount; i++) {
+        if ((mem_req.memoryTypeBits & (1 << i)) && 
+            (mem_props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) &&
+            (mem_props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+            mem_type_index = i;
+            break;
+        }
+    }
+    
+    alloc_info.memoryTypeIndex = mem_type_index;
+    vkAllocateMemory(VK_DEVICE, &alloc_info, NULL, &ub->mem);
+    vkBindBufferMemory(VK_DEVICE, ub->buffer, ub->mem, 0);
+    
+    vkMapMemory(VK_DEVICE, ub->mem, 0, size, 0, &ub->mapped);
+}
+
+void create_descriptor_set(VkDescriptorSet* descriptor_set) {
+    // Create descriptor pool
+    VkDescriptorPoolSize pool_sizes[2] = {
+        {
+            .type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1
+        },
+        {
+            .type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+            .descriptorCount = 1,
+        }
+    };
+
+    VkDescriptorPoolCreateInfo pool_info = {
+        .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets       = 1,
+        .poolSizeCount = 2,
+        .pPoolSizes    = pool_sizes,
+    };
+
+    vkCreateDescriptorPool(VK_DEVICE, &pool_info, NULL, &DESCRIPTOR_POOL);
+
+    // Allocate descriptor set
+    VkDescriptorSetAllocateInfo alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = DESCRIPTOR_POOL,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &VK_DESCRIPTOR_SET_LAYOUT,
+    };
+
+    vkAllocateDescriptorSets(VK_DEVICE, &alloc_info, descriptor_set);
+
+    // Update descriptor set
+    VkDescriptorBufferInfo view_proj_buffer_info = {
+        .buffer = VIEW_PROJ_UBO.buffer,
+        .offset = 0,
+        .range  = sizeof(ViewProjectionUBO),
+    };
+
+    VkDescriptorBufferInfo model_buffer_info = {
+        .buffer = MODELS.buffer,
+        .offset = 0,
+        .range  = sizeof(Matrix4)
+    };
+
+    VkWriteDescriptorSet descriptor_writes[2] = {
+    {
+        .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet          = *descriptor_set,
+        .dstBinding      = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pBufferInfo     = &view_proj_buffer_info,
+    },
+    {
+        .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet          = *descriptor_set,
+        .dstBinding      = 1,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+        .pBufferInfo     = &model_buffer_info,
+    }
+    };
+
+    vkUpdateDescriptorSets(VK_DEVICE, 2, descriptor_writes, 0, NULL);
+}
+
+void update_view_projection(UniformBuffer* ubo, ViewProjectionUBO* view_proj) {
+    memcpy(ubo->mapped, view_proj, sizeof(ViewProjectionUBO));
+}
+
+void update_model(Matrix4 mat) {
+    size_t offset = 0 * UBO_ALIGNMENT;
+    memcpy((char*)MODELS.mapped + offset, &mat, sizeof(Matrix4));
 }
