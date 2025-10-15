@@ -608,9 +608,9 @@ int main(int argc, char** argv) {
     // VkPipelineLayout pipeline_layout = {};
 
     Vertex vertices[] = {
-        {{ -0.5f,  0.5f }, { 255, 0,   0,   255 }},
-        {{  0.5f,  0.5f }, { 0,   255, 0,   255 }},
-        {{  0.0f, -0.5f }, { 0,   0,   255, 255 }},
+        {{ -0.5f,  0.0f }, { 255, 0,   0,   255 }},
+        {{  0.5f,  0.0f }, { 0,   255, 0,   255 }},
+        {{  0.0f,  0.5f }, { 0,   0,   255, 255 }},
     };
 
     create_vertex_buffer(vertices, 3);
@@ -893,16 +893,19 @@ int main(int argc, char** argv) {
                      &VK_PRESENT_QUEUE);
 
     float camera_position[2] = {0, 0};
-    float camera_width       = 4;
-    float camera_height      = 3;
-    float left               = camera_position[0] - camera_width;
-    float right              = camera_position[0] + camera_width;
-    float top                = camera_position[1] + camera_height;
-    float bottom             = camera_position[1] - camera_height;
+    float camera_size        = 10;
+    float left               = camera_position[0] - camera_size;
+    float right              = camera_position[0] + camera_size;
+    float top                = camera_position[1] + camera_size;
+    float bottom             = camera_position[1] - camera_size;
 
     VIEW       = matrix4_transform_2d(-camera_position[0], -camera_position[1]);
     PROJECTION = matrix4_ortho_2d(left, right, top, bottom);
-    MODEL      = matrix4_trs_2d(0, 0, 0, 4, 1.5f);
+    float angle = 0.0f;
+    const float rotation_speed = 10.0f;
+    float position[2] = {0, 0};
+    float speed = 2.0f;
+    MODEL      = matrix4_trs_2d(position[0], position[1], radians(angle), 1, 1);
 
     ViewProjectionUBO view_proj = {
         .view = VIEW,
@@ -923,8 +926,27 @@ int main(int argc, char** argv) {
                TIME         = current_time;
         int    fps          = (int)(1.0l / actual_dt);
         char buf[128];
+        float dt = (float)actual_dt;
         sprintf(buf, "fps: %i", fps);
         glass_set_window_title(WINDOW, buf);
+
+        angle += rotation_speed * dt;
+
+        if (glass_is_button_pressed(GLASS_SCANCODE_W)) {
+            position[1] += speed * dt;
+        } else if (glass_is_button_pressed(GLASS_SCANCODE_S)) {
+            position[1] -= speed * dt;
+        }
+
+        if (glass_is_button_pressed(GLASS_SCANCODE_A)) {
+            position[0] -= speed * dt;
+        } else if (glass_is_button_pressed(GLASS_SCANCODE_D)) {
+            position[0] += speed * dt;
+        }
+
+        MODEL = matrix4_trs_2d(position[0], position[1], radians(angle), 5, 5);
+
+        update_model(MODEL);
         glass_main_loop();
     }
 
@@ -1083,7 +1105,7 @@ GlassErrorCode glass_render() {
     vkCmdSetViewport(VK_COMMAND_BUFFER, 0, 1, &VK_VIEWPORT);
     vkCmdSetScissor(VK_COMMAND_BUFFER, 0, 1, &VK_SCISSORS);
 
-    printf("Binding %d buffers\n", VERTEX_BUFFERS_COUNT);
+    // printf("Binding %d buffers\n", VERTEX_BUFFERS_COUNT);
     vkCmdBindVertexBuffers(VK_COMMAND_BUFFER, 0, VERTEX_BUFFERS_COUNT, VERTEX_BUFFERS, OFFSETS);
     u32 dynamic_offset = 0 * UBO_ALIGNMENT;
     vkCmdBindDescriptorSets(VK_COMMAND_BUFFER, VK_PIPELINE_BIND_POINT_GRAPHICS, VK_PIPELINE_LAYOUT, 0, 1, &DESCRIPTOR_SET, 1, &dynamic_offset);
@@ -1306,7 +1328,6 @@ void create_vertex_buffer(Vertex* vertices, u32 vertex_count) {
 void create_descriptor_set_layout(VkDescriptorSetLayout* dsl) {
     VkDescriptorSetLayoutBinding bindings[2] = {};
     
-    // Binding 0: View/Projection UBO
     bindings[0] = {
         .binding            = 0,
         .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -1314,9 +1335,6 @@ void create_descriptor_set_layout(VkDescriptorSetLayout* dsl) {
         .stageFlags         = VK_SHADER_STAGE_VERTEX_BIT,
         .pImmutableSamplers = NULL,
     };
-    
-    
-    // Binding 1: Dynamic Model Matrix UBO
     bindings[1] = {
         .binding            = 1,
         .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,

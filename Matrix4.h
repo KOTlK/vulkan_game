@@ -2,6 +2,9 @@
 
 #include <math.h>
 
+#define degrees(rad) rad * 57.2957795f
+#define radians(deg) deg * 0.0174532925f
+
 typedef union Matrix4 {
     struct {
         float m00, m10, m20, m30;
@@ -167,16 +170,18 @@ static inline Matrix4 matrix4_trs_2d(float px, float py, float angle, float sx, 
     float s = sin(angle);
     float c = cos(angle);
 
-    return matrix4_make(c * sx,  s * sx, 0, 0,
-                        -s * sy, c * sy, 0, 0,
-                        0,       0,      1, 0,
-                        px,      py,     0, 1);
+    return matrix4_make( c * sx,  s * sx, 0, 0,
+                        -s * sy,  c * sy, 0, 0,
+                         0,       0,      1, 0,
+                         px,      py,     0, 1);
 }
 
 static inline Matrix4 matrix4_ortho_2d(float left, float right, float top, float bottom) {
-    return matrix4_make( 2.0f / (right - left), 0,                     0, 0,
-                         0,                     2.0f / (top - bottom), 0, 0,
-                         0,                     0,                     1, 0,
-                         0,                     0,                     0, 1);
+    float rml = right - left;
+    float tmb = top - bottom;
+    return matrix4_make( 2.0f / (rml),            0,                       0, 0,
+                         0,                       -2.0f / (tmb),            0, 0,
+                         0,                       0,                       1, 0,
+                         -(right + left) / (rml), (top + bottom) / (tmb), 0, 1);
 }
 #endif //GAME_MATH_IMPLEMENTATION
