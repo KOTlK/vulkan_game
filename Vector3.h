@@ -11,10 +11,6 @@ static inline Vector3 sub_v3_v3   (Vector3 lhs, Vector3 rhs);
 static inline Vector3 mul_v3_float(Vector3 lhs, float   rhs);
 static inline Vector3 div_v3_float(Vector3 lhs, float   rhs);
 
-static inline float   dot  (Vector3 lhs, Vector3 rhs);
-static inline Vector3 cross(Vector3 lhs, Vector3 rhs);
-
-
 #ifdef GAME_MATH_IMPLEMENTATION
 // operators for c++
 #ifdef __cplusplus
@@ -132,22 +128,6 @@ static inline Vector3 div_v3_float(Vector3 lhs, float   rhs) {
         .x = lhs.x / rhs,
         .y = lhs.y / rhs,
         .z = lhs.z / rhs,
-    };
-
-    return v;
-}
-
-static inline float   dot  (Vector3 lhs, Vector3 rhs) {
-    return lhs.x * rhs.x + 
-           lhs.y * rhs.y +
-           lhs.z * rhs.z;
-}
-
-static inline Vector3 cross(Vector3 lhs, Vector3 rhs) {
-    Vector3 v = {
-        .x = lhs.y * rhs.z - lhs.z * rhs.y,
-        .y = lhs.z * rhs.x - lhs.x * rhs.z,
-        .z = lhs.x * rhs.y - lhs.y * rhs.x
     };
 
     return v;

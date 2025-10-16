@@ -28,6 +28,7 @@ static inline Matrix4 matrix4_rotate_2d(float angle);
 static inline Matrix4 matrix4_scale_2d(float x, float y);
 static inline Matrix4 matrix4_trs_2d(float px, float py, float angle, float sx, float sy);
 static inline Matrix4 matrix4_ortho_2d(float left, float right, float top, float bottom);
+static inline Matrix4 matrix4_mvp(float cx, float cy, float left, float right, float top, float bottom, float px, float py, float r, float sx, float sy);
 static inline float   matrix4_det(Matrix4* mat);
 
 #define GAME_MATH_IMPLEMENTATION
@@ -151,8 +152,8 @@ static inline Matrix4 matrix4_transform_2d(float x, float y) {
 }
 
 static inline Matrix4 matrix4_rotate_2d(float angle) {
-    float c = cos(angle);
-    float s = sin(angle);
+    float c = cosf(angle);
+    float s = sinf(angle);
     return matrix4_make( c, s, 0, 0,
                         -s, c, 0, 0,
                          0, 0, 1, 0,
@@ -167,8 +168,8 @@ static inline Matrix4 matrix4_scale_2d(float x, float y) {
 }
 
 static inline Matrix4 matrix4_trs_2d(float px, float py, float angle, float sx, float sy) {
-    float s = sin(angle);
-    float c = cos(angle);
+    float s = sinf(angle);
+    float c = cosf(angle);
 
     return matrix4_make( c * sx,  s * sx, 0, 0,
                         -s * sy,  c * sy, 0, 0,
@@ -184,4 +185,31 @@ static inline Matrix4 matrix4_ortho_2d(float left, float right, float top, float
                          0,                       0,                       1, 0,
                          -(right + left) / (rml), (top + bottom) / (tmb), 0, 1);
 }
+
+static inline Matrix4 matrix4_mvp(float cx, 
+                                  float cy, 
+                                  float l, 
+                                  float r, 
+                                  float t,
+                                  float b,
+                                  float px,
+                                  float py,
+                                  float angle,
+                                  float sx,
+                                  float sy) {
+    float c   = cosf(angle);
+    float s   = sinf(angle);
+    float rml = r-l;
+    float tmb = t-b;
+
+    float div1 = 2.0f / rml;
+    float div2 = 2.0f / tmb;
+
+    return matrix4_make(div1 * c * sx,  -div2 * s * sx,  0, 0,
+                        -div1 * s * sy, -div2 * c * sy,  0, 0,
+                        0,               0,              1, 0,
+
+    ((2.0f * (px-cx)) - (r+l)) / rml, ((-2.0f * (py+cy)) + (t+b)) / tmb, 0, 1);
+}
+
 #endif //GAME_MATH_IMPLEMENTATION

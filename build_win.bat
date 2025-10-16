@@ -17,4 +17,4 @@ set LDFLAGS=-L"%VULKAN_SDK%\Lib" ^
 glslc shader.vert -o vert.spv
 glslc shader.frag -o frag.spv
 
-clang++ main.cpp glass_windows.cpp glass_render_vulkan.cpp -o main.exe -std=c++17 %CFLAGS% %LDFLAGS% -D_CRT_SECURE_NO_WARNINGS -DVulkan -DVK_USE_PLATFORM_WIN32_KHR
+clang++ main.cpp glass_windows.cpp glass_render_vulkan.cpp geometry.cpp -o main.exe -std=c++17 %CFLAGS% %LDFLAGS% -D_CRT_SECURE_NO_WARNINGS -DVulkan -DVK_USE_PLATFORM_WIN32_KHR

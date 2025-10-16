@@ -7,12 +7,23 @@
 #include "basic.h"
 #include <cstring>
 #define GAME_MATH_IMPLEMENTATION
+#include "Vector2.h"
 #include "Vector3.h"
 #include "Matrix4.h"
+#include "geometry.h"
 
 #define VERTEX_BUFFERS_INITIAL_LENGTH 8
 #define VERTEX_BUFFERS_STEP           8
 #define UBO_ALIGNMENT                 256
+
+typedef struct Camera2D {
+    Vector2 position;
+    float   size;
+    float   left;
+    float   right;
+    float   top;
+    float   bottom;
+} Camera2D;
 
 typedef struct Vertex {
     float position[2];
@@ -29,6 +40,18 @@ typedef struct ViewProjectionUBO {
     alignas(16) Matrix4 view;
     alignas(16) Matrix4 proj;
 } ViewProjectionUBO;
+
+typedef struct ModelUBO {
+    alignas(16) Matrix4 model;
+    alignas(16) Matrix4 mvp;
+} ModelUBO;
+
+typedef struct RenderBatch {
+    VkBuffer       buffer;
+    VkDeviceSize   offsets;
+    VkDeviceMemory memory;
+    u32            vertex_count;
+} RenderBatch;
 
 Window*          WINDOW{};
 VkInstance       VK_INSTANCE{};
@@ -65,6 +88,8 @@ Matrix4 VIEW;
 Matrix4 PROJECTION;
 Matrix4 MODEL;
 
+Camera2D CAMERA = {};
+
 double TIME{};
 
 void print_instance_extensions();
@@ -77,7 +102,10 @@ void create_descriptor_set_layout(VkDescriptorSetLayout* dsl);
 void create_uniform_buffer(UniformBuffer* ub, u32 size);
 void create_descriptor_set(VkDescriptorSet* descriptor_set);
 void update_view_projection(UniformBuffer* ubo, ViewProjectionUBO* view_proj);
-void update_model(Matrix4 mat);
+void update_model(UniformBuffer* ubo, ModelUBO* model, u32 index);
+void camera2d_make(Vector2 position, float size, Camera2D* cam);
+void camera2d_update(Camera2D* cam);
+void camera2d_move(Camera2D* cam, Vector2 dir);
 
 int main(int argc, char** argv) {
     const char* name         = "Hello";
@@ -892,15 +920,15 @@ int main(int argc, char** argv) {
                      0,
                      &VK_PRESENT_QUEUE);
 
-    float camera_position[2] = {0, 0};
-    float camera_size        = 10;
-    float left               = camera_position[0] - camera_size;
-    float right              = camera_position[0] + camera_size;
-    float top                = camera_position[1] + camera_size;
-    float bottom             = camera_position[1] - camera_size;
+    camera2d_make(vector2_make(0, 0), 4, &CAMERA);
+    camera2d_update(&CAMERA);
+    // float left               = camera_position[0] - camera_size;
+    // float right              = camera_position[0] + camera_size;
+    // float top                = camera_position[1] + camera_size;
+    // float bottom             = camera_position[1] - camera_size;
 
-    VIEW       = matrix4_transform_2d(-camera_position[0], -camera_position[1]);
-    PROJECTION = matrix4_ortho_2d(left, right, top, bottom);
+    // VIEW       = matrix4_transform_2d(-camera_position[0], -camera_position[1]);
+    // PROJECTION = matrix4_ortho_2d(left, right, top, bottom);
     float angle = 0.0f;
     const float rotation_speed = 10.0f;
     float position[2] = {0, 0};
@@ -912,12 +940,33 @@ int main(int argc, char** argv) {
         .proj = PROJECTION
     };
 
+    Matrix4 mvp = matrix4_mvp(CAMERA.position.x,
+                              CAMERA.position.y,
+                              CAMERA.left,
+                              CAMERA.right,
+                              CAMERA.top,
+                              CAMERA.bottom,
+                              position[0],
+                              position[1],
+                              radians(angle),
+                              1, 1);
+
+    ModelUBO ubo = {
+        .model = MODEL,
+        .mvp   = mvp
+    };
+
     update_view_projection(&VIEW_PROJ_UBO, &view_proj);
-    update_model(MODEL);
+    update_model(&MODELS, &ubo, 0);
 
     TIME = glass_get_time();
 
     while (true) {
+        if (glass_is_button_pressed(GLASS_SCANCODE_ESCAPE)) {
+            glass_exit();
+            break;
+        }
+
         if (glass_exit_required())
             break;
         
@@ -944,9 +993,42 @@ int main(int argc, char** argv) {
             position[0] += speed * dt;
         }
 
-        MODEL = matrix4_trs_2d(position[0], position[1], radians(angle), 5, 5);
+        float camera_speed = 2.0f;
+        Vector2 camera_move = {{0, 0}};
 
-        update_model(MODEL);
+        if (glass_is_button_pressed(GLASS_SCANCODE_UP)) {
+            camera_move.y += camera_speed * dt;
+        } else if (glass_is_button_pressed(GLASS_SCANCODE_DOWN)) {
+            camera_move.y -= camera_speed * dt;
+        }
+
+        if (glass_is_button_pressed(GLASS_SCANCODE_LEFT)) {
+            camera_move.x -= camera_speed * dt;
+        } else if (glass_is_button_pressed(GLASS_SCANCODE_RIGHT)) {
+            camera_move.x += camera_speed * dt;
+        }
+
+        camera2d_move(&CAMERA, camera_move);
+
+        MODEL = matrix4_trs_2d(position[0], position[1], radians(angle), 1, 1);
+
+        Matrix4 mvp = matrix4_mvp(CAMERA.position.x,
+                                  -CAMERA.position.y,
+                                  CAMERA.left,
+                                  CAMERA.right,
+                                  CAMERA.top,
+                                  CAMERA.bottom,
+                                  position[0],
+                                  position[1],
+                                  radians(angle),
+                                  1, 1);
+
+        ModelUBO ubo = {
+            .model = MODEL,
+            .mvp   = mvp
+        };
+
+        update_model(&MODELS, &ubo, 0);
         glass_main_loop();
     }
 
@@ -1053,6 +1135,25 @@ int main(int argc, char** argv) {
     printf("%f\n", det);
 
     printf("\n");
+
+    float positions[] = {1, 2, 3, 4, 5, 6};  // 24
+    Color colors[] = {{255, 255, 255, 255},  // 4
+                      {255, 255, 255, 255},  // 4
+                      {255, 255, 255, 255}}; // 4
+
+    Shape2D shape;
+
+    shape2d_make(positions, colors, 3, &Allocator_Std, &shape);
+
+    printf("%d\n", shape.vertex_count);
+
+    for (u32 i = 0; i < shape.vertex_count; i++) {
+        Vertex2D vertex = shape.vertices[i];
+        Color    color  = shape.colors[i];
+        printf("%f, %f, %ir, %ig, %ib, %ia\n", vertex.position.x, vertex.position.y, color.r, color.g, color.b, color.a);
+    }
+
+    shape2d_free(&shape, &Allocator_Std);
 
     return 0;
 }
@@ -1414,10 +1515,10 @@ void create_descriptor_set(VkDescriptorSet* descriptor_set) {
 
     // Allocate descriptor set
     VkDescriptorSetAllocateInfo alloc_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = DESCRIPTOR_POOL,
+        .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool     = DESCRIPTOR_POOL,
         .descriptorSetCount = 1,
-        .pSetLayouts = &VK_DESCRIPTOR_SET_LAYOUT,
+        .pSetLayouts        = &VK_DESCRIPTOR_SET_LAYOUT,
     };
 
     vkAllocateDescriptorSets(VK_DEVICE, &alloc_info, descriptor_set);
@@ -1432,7 +1533,7 @@ void create_descriptor_set(VkDescriptorSet* descriptor_set) {
     VkDescriptorBufferInfo model_buffer_info = {
         .buffer = MODELS.buffer,
         .offset = 0,
-        .range  = sizeof(Matrix4)
+        .range  = sizeof(ModelUBO)
     };
 
     VkWriteDescriptorSet descriptor_writes[2] = {
@@ -1463,7 +1564,41 @@ void update_view_projection(UniformBuffer* ubo, ViewProjectionUBO* view_proj) {
     memcpy(ubo->mapped, view_proj, sizeof(ViewProjectionUBO));
 }
 
-void update_model(Matrix4 mat) {
-    size_t offset = 0 * UBO_ALIGNMENT;
-    memcpy((char*)MODELS.mapped + offset, &mat, sizeof(Matrix4));
+void update_model(UniformBuffer* ubo, ModelUBO* model, u32 index) {
+    u32 offset = index * UBO_ALIGNMENT;
+    memcpy((char*)ubo->mapped + offset, model, sizeof(ModelUBO));
+}
+
+void camera2d_make(Vector2 position, float size, Camera2D* cam) {
+    cam->position = position;
+    cam->size     = size;
+    cam->left     = position.x - size;
+    cam->right    = position.x + size;
+    cam->top      = position.y + size;
+    cam->bottom   = position.y - size;
+}
+
+void camera2d_update(Camera2D* cam) {
+    cam->left   = cam->position.x - cam->size;
+    cam->right  = cam->position.x + cam->size;
+    cam->top    = cam->position.y + cam->size;
+    cam->bottom = cam->position.y - cam->size;
+
+    VIEW       = matrix4_transform_2d(-cam->position.x, -cam->position.y);
+    PROJECTION = matrix4_ortho_2d(cam->left, cam->right, cam->top, cam->bottom);
+
+    ViewProjectionUBO view_proj = {
+        .view = VIEW,
+        .proj = PROJECTION
+    };
+
+    update_view_projection(&VIEW_PROJ_UBO, &view_proj);
+}
+
+void camera2d_move(Camera2D* cam, Vector2 dir) {
+    cam->position.x += dir.x;
+    cam->position.y += dir.y;
+
+    printf("Camera position: (%f, %f)\n", cam->position.x, cam->position.y);
+    camera2d_update(cam);
 }
