@@ -53,6 +53,12 @@ typedef struct ModelUBO {
     alignas(16) Matrix4 mvp;
 } ModelUBO;
 
+typedef struct Transform2d {
+    Vector2 position;
+    Vector2 scale;
+    float   rotation;
+} Transform2d;
+
 Window*          WINDOW{};
 VkInstance       VK_INSTANCE{};
 VkSurfaceKHR     VK_SURFACE{};
@@ -60,6 +66,7 @@ QueueFamilies    QUEUES{};
 VkPhysicalDevice VK_PHYS_DEVICE{};
 VkDevice         VK_DEVICE{};
 VkSwapchainKHR   VK_SWAPCHAIN{};
+VkCommandPool    VK_COMMAND_POOL{};
 VkCommandBuffer  VK_COMMAND_BUFFER{};
 VkRenderPass     VK_RENDER_PASS{};
 VkFramebuffer*   VK_FRAME_BUFFERS{};
@@ -70,11 +77,10 @@ VkQueue          VK_GRAPHICS_QUEUE{};
 VkQueue          VK_PRESENT_QUEUE{};
 VkViewport       VK_VIEWPORT{};
 VkRect2D         VK_SCISSORS{};
-VkBuffer*        VERTEX_BUFFERS;
-VkDeviceSize*    OFFSETS;
-VkDeviceMemory*  MEMORY;
-u32              VERTEX_BUFFERS_COUNT  = 0;
-u32              VERTEX_BUFFERS_LENGTH = 0;
+VkBuffer         VERTEX_BUFFER{};
+VkDeviceMemory   VERTEX_BUFFER_MEMORY{};
+VkBuffer         INDEX_BUFFER{};
+VkDeviceMemory   INDEX_BUFFER_MEMORY{};
 VkDescriptorSetLayout VK_DESCRIPTOR_SET_LAYOUT{};
 UniformBuffer         VIEW_PROJ_UBO;
 UniformBuffer         MODELS;
@@ -82,6 +88,10 @@ VkDescriptorPool      DESCRIPTOR_POOL;
 VkDescriptorSet       DESCRIPTOR_SET;
 VkShaderModule        VERT{};
 VkShaderModule        FRAG{};
+
+Transform2d* TRANSFORMS;
+u32          TRANSFORMS_COUNT  = 0;
+u32          TRANSFORMS_LENGTH = 0;
 
 VkFence     VK_SINGLE_FRAME_FENCE{};
 VkSemaphore VK_SEMAPHORE_IMAGE_READY{};
@@ -107,11 +117,11 @@ int      create_swapchain(VkSurfaceCapabilitiesKHR surface_capabilities, VkSurfa
 int      create_render_pipeline(VkSurfaceFormatKHR surface_format);
 
 
-void append_vertex_buffer(VkBuffer buffer, VkDeviceSize offset, VkDeviceMemory mem);
-void clear_vertex_buffers();
-void destroy_vertex_buffers();
+void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* memory);
+void copy_buffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
 bool create_shader_module(VkDevice device, const char* name, VkShaderModule* shader_module);
-void create_vertex_buffer(Vertex* vertices, u32 vertex_count);
+void create_vertex_buffer(Vertex* vertices, u32 vertex_count, VkBuffer* buffer, VkDeviceMemory* memory);
+void create_index_buffer(u16* indices, u32 index_count, VkBuffer* buffer, VkDeviceMemory* memory);
 void create_descriptor_set_layout(VkDescriptorSetLayout* dsl);
 void create_uniform_buffer(UniformBuffer* ub, u32 size);
 void create_descriptor_set(VkDescriptorSet* descriptor_set);
@@ -120,6 +130,11 @@ void update_model(UniformBuffer* ubo, ModelUBO* model, u32 index);
 void camera2d_make(Vector2 position, float size, Camera2D* cam);
 void camera2d_update(Camera2D* cam);
 void camera2d_move(Camera2D* cam, Vector2 dir);
+
+void transform2d_to_model(Transform2d* transform, Matrix4* model);
+void transforms_init(u32 initial_size);
+u32  transforms_append(Transform2d transform);
+void transforms_set(u32 index, Transform2d* transform);
 
 int main(int argc, char** argv) {
     const char* name         = "Hello";
@@ -328,7 +343,7 @@ int main(int argc, char** argv) {
     printf("Frame buffers created.\n");
 
     // create command pool
-    VkCommandPool command_pool;
+    // VkCommandPool command_pool;
 
     VkCommandPoolCreateInfo command_pool_info = {
         .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -340,7 +355,7 @@ int main(int argc, char** argv) {
     result = vkCreateCommandPool(VK_DEVICE,
                                  &command_pool_info,
                                  NULL,
-                                 &command_pool);
+                                 &VK_COMMAND_POOL);
                                 
     if (result != VK_SUCCESS) {
         printf("Cannot create command bool. %d\n", result);
@@ -350,7 +365,7 @@ int main(int argc, char** argv) {
     VkCommandBufferAllocateInfo command_buffer_info = {
         .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .pNext              = NULL,
-        .commandPool        = command_pool,
+        .commandPool        = VK_COMMAND_POOL,
         .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
         .commandBufferCount = 1
     };
@@ -397,20 +412,47 @@ int main(int argc, char** argv) {
                      0,
                      &VK_PRESENT_QUEUE);
 
+    // Vertex vertices[] = {
+    //     {{ -0.5f,  0.0f }, { 255, 0,   0,   255 }},
+    //     {{  0.5f,  0.0f }, { 0,   255, 0,   255 }},
+    //     {{  0.0f,  0.5f }, { 0,   0,   255, 255 }},
+    // };
+
+    Vertex vertices[] = {
+        {{   0.5f,  -0.5f }, { 255, 0,   0,   255 }},
+        {{   0.5f,   0.5f }, { 0,   255, 0,   255 }},
+        {{  -0.5f,   0.5f }, { 0,   0,   255, 255 }},
+        {{  -0.5f,  -0.5f }, { 255, 255, 255, 255 }},
+    };
+
+    u16 indices[] = {
+        0, 1, 2, 0, 2, 3
+    };
+
+    create_vertex_buffer(vertices, 4, &VERTEX_BUFFER, &VERTEX_BUFFER_MEMORY);
+    create_index_buffer(indices, 6, &INDEX_BUFFER, &INDEX_BUFFER_MEMORY);
+
+    create_uniform_buffer(&VIEW_PROJ_UBO, sizeof(ViewProjectionUBO));
+
+    u32 model_size = 1 * UBO_ALIGNMENT;
+    create_uniform_buffer(&MODELS, model_size);
+
+    create_descriptor_set(&DESCRIPTOR_SET);
+
     camera2d_make(vector2_make(0, 0), 4, &CAMERA);
     camera2d_update(&CAMERA);
-    // float left               = camera_position[0] - camera_size;
-    // float right              = camera_position[0] + camera_size;
-    // float top                = camera_position[1] + camera_size;
-    // float bottom             = camera_position[1] - camera_size;
 
-    // VIEW       = matrix4_transform_2d(-camera_position[0], -camera_position[1]);
-    // PROJECTION = matrix4_ortho_2d(left, right, top, bottom);
-    float angle                = 0.0f;
+    Transform2d transform;
+
+    transform.rotation = 0;
+    transform.position = {{0, 0}};
+    transform.scale    = {{1, 1}};
+
     const float rotation_speed = 10.0f;
-    float position[2]          = {0, 0};
     float speed                = 2.0f;
-          MODEL                = matrix4_trs_2d(position[0], position[1], radians(angle), 1, 1);
+    transforms_init(32);
+    u32 tindex = transforms_append(transform);
+    transform2d_to_model(&transform, &MODEL);
 
     ViewProjectionUBO view_proj = {
         .view = VIEW,
@@ -423,10 +465,11 @@ int main(int argc, char** argv) {
                               CAMERA.right,
                               CAMERA.top,
                               CAMERA.bottom,
-                              position[0],
-                              position[1],
-                              radians(angle),
-                              1, 1);
+                              transform.position.x,
+                              transform.position.y,
+                              radians(transform.rotation),
+                              transform.scale.x,
+                              transform.scale.y);
 
     ModelUBO ubo = {
         .model = MODEL,
@@ -456,18 +499,18 @@ int main(int argc, char** argv) {
         sprintf(buf, "fps: %i", fps);
         glass_set_window_title(WINDOW, buf);
 
-        angle += rotation_speed * dt;
+        transform.rotation += rotation_speed * dt;
 
         if (glass_is_button_pressed(GLASS_SCANCODE_W)) {
-            position[1] += speed * dt;
+            transform.position.y += speed * dt;
         } else if (glass_is_button_pressed(GLASS_SCANCODE_S)) {
-            position[1] -= speed * dt;
+            transform.position.y -= speed * dt;
         }
 
         if (glass_is_button_pressed(GLASS_SCANCODE_A)) {
-            position[0] -= speed * dt;
+            transform.position.x -= speed * dt;
         } else if (glass_is_button_pressed(GLASS_SCANCODE_D)) {
-            position[0] += speed * dt;
+            transform.position.x += speed * dt;
         }
 
         float camera_speed = 2.0f;
@@ -486,8 +529,8 @@ int main(int argc, char** argv) {
         }
 
         camera2d_move(&CAMERA, camera_move);
-
-        MODEL = matrix4_trs_2d(position[0], position[1], radians(angle), 1, 1);
+        transforms_set(tindex, &transform);
+        transform2d_to_model(&transform, &MODEL);
 
         Matrix4 mvp = matrix4_mvp(CAMERA.position.x,
                                   -CAMERA.position.y,
@@ -495,10 +538,11 @@ int main(int argc, char** argv) {
                                   CAMERA.right,
                                   CAMERA.top,
                                   CAMERA.bottom,
-                                  position[0],
-                                  position[1],
-                                  radians(angle),
-                                  1, 1);
+                                  transform.position.x,
+                                  transform.position.y,
+                                  radians(transform.rotation),
+                                  transform.scale.x,
+                                  transform.scale.y);
 
         ModelUBO ubo = {
             .model = MODEL,
@@ -513,7 +557,12 @@ int main(int argc, char** argv) {
 
     vkDeviceWaitIdle(VK_DEVICE);
 
-    destroy_vertex_buffers();
+    vkDestroyBuffer(VK_DEVICE, VERTEX_BUFFER, NULL);
+    vkFreeMemory(VK_DEVICE, VERTEX_BUFFER_MEMORY, NULL);
+
+    vkDestroyBuffer(VK_DEVICE, INDEX_BUFFER, NULL);
+    vkFreeMemory(VK_DEVICE, INDEX_BUFFER_MEMORY, NULL);
+    // destroy_vertex_buffers();
     vkDestroyDescriptorPool(VK_DEVICE, DESCRIPTOR_POOL, NULL);
     vkDestroyDescriptorSetLayout(VK_DEVICE, VK_DESCRIPTOR_SET_LAYOUT, NULL);
     vkDestroyBuffer(VK_DEVICE, VIEW_PROJ_UBO.buffer, NULL);
@@ -526,7 +575,7 @@ int main(int argc, char** argv) {
     vkDestroySemaphore(VK_DEVICE, VK_SEMAPHORE_RENDER_FINISHED, NULL);
     vkDestroyFence(VK_DEVICE, VK_SINGLE_FRAME_FENCE, NULL);
 
-    vkDestroyCommandPool(VK_DEVICE, command_pool, NULL);
+    vkDestroyCommandPool(VK_DEVICE, VK_COMMAND_POOL, NULL);
 
     for (u32 i = 0; i < image_count; i++) {
         vkDestroyFramebuffer(VK_DEVICE, VK_FRAME_BUFFERS[i], NULL);
@@ -684,11 +733,15 @@ GlassErrorCode glass_render() {
     vkCmdSetScissor(VK_COMMAND_BUFFER, 0, 1, &VK_SCISSORS);
 
     // printf("Binding %d buffers\n", VERTEX_BUFFERS_COUNT);
-    vkCmdBindVertexBuffers(VK_COMMAND_BUFFER, 0, VERTEX_BUFFERS_COUNT, VERTEX_BUFFERS, OFFSETS);
-    u32 dynamic_offset = 0 * UBO_ALIGNMENT;
+    u32 dynamic_offset = 0;
     vkCmdBindDescriptorSets(VK_COMMAND_BUFFER, VK_PIPELINE_BIND_POINT_GRAPHICS, VK_PIPELINE_LAYOUT, 0, 1, &DESCRIPTOR_SET, 1, &dynamic_offset);
 
-    vkCmdDraw(VK_COMMAND_BUFFER, 3, 1, 0, 0);
+    const VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(VK_COMMAND_BUFFER, 0, 1, &VERTEX_BUFFER, offsets);
+    vkCmdBindIndexBuffer(VK_COMMAND_BUFFER, INDEX_BUFFER, 0, VK_INDEX_TYPE_UINT16);
+
+    // vkCmdDraw(VK_COMMAND_BUFFER, 3, 1, 0, 0);
+    vkCmdDrawIndexed(VK_COMMAND_BUFFER, 6, 1, 0, 0, 0);
     
     vkCmdEndRenderPass(VK_COMMAND_BUFFER);
     auto result = vkEndCommandBuffer(VK_COMMAND_BUFFER);
@@ -816,91 +869,33 @@ bool create_shader_module(VkDevice device, const char* name, VkShaderModule* sha
     return true;
 }
 
-void append_vertex_buffer(VkBuffer buffer, VkDeviceSize offset, VkDeviceMemory mem) {
-    if (VERTEX_BUFFERS_COUNT == 0 && !VERTEX_BUFFERS) {
-        VERTEX_BUFFERS        = Calloc(VkBuffer, VERTEX_BUFFERS_INITIAL_LENGTH);
-        OFFSETS               = Calloc(VkDeviceSize, VERTEX_BUFFERS_INITIAL_LENGTH);
-        MEMORY                = Calloc(VkDeviceMemory, VERTEX_BUFFERS_INITIAL_LENGTH);
-        VERTEX_BUFFERS_LENGTH = VERTEX_BUFFERS_INITIAL_LENGTH;
-    } else if (VERTEX_BUFFERS_COUNT >= VERTEX_BUFFERS_LENGTH) {
-        VERTEX_BUFFERS_LENGTH += VERTEX_BUFFERS_STEP;
-        VERTEX_BUFFERS         = Realloc(VkBuffer, 
-                                         VERTEX_BUFFERS, 
-                                         sizeof(VkBuffer) * VERTEX_BUFFERS_LENGTH);
-        OFFSETS                = Realloc(VkDeviceSize, 
-                                         OFFSETS, 
-                                         sizeof(VkDeviceSize) * VERTEX_BUFFERS_LENGTH);
-        MEMORY                 = Realloc(VkDeviceMemory, 
-                                         OFFSETS, 
-                                         sizeof(VkDeviceMemory) * VERTEX_BUFFERS_LENGTH);
-    }
+void create_vertex_buffer(Vertex* vertices, u32 vertex_count, VkBuffer* buffer, VkDeviceMemory* memory) {
+    u64 size = sizeof(vertices[0]) * vertex_count;
 
-    VERTEX_BUFFERS[VERTEX_BUFFERS_COUNT]  = buffer;
-    OFFSETS[VERTEX_BUFFERS_COUNT]         = offset;
-    MEMORY[VERTEX_BUFFERS_COUNT]          = mem;
-    VERTEX_BUFFERS_COUNT                 += 1;
-}
-
-void clear_vertex_buffers() {
-    for (u32 i = 0; i < VERTEX_BUFFERS_COUNT; i++) {
-        vkDestroyBuffer(VK_DEVICE, VERTEX_BUFFERS[i], NULL);
-        vkFreeMemory(VK_DEVICE, MEMORY[i], NULL);
-    }
-    VERTEX_BUFFERS_COUNT = 0;
-}
-
-void destroy_vertex_buffers() {
-    clear_vertex_buffers();
-    Free(VERTEX_BUFFERS);
-    Free(OFFSETS);
-    Free(MEMORY);
-}
-
-void create_vertex_buffer(Vertex* vertices, u32 vertex_count) {
-    VkBufferCreateInfo buffer_info = {
-        .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size        = sizeof(vertices[0]) * vertex_count,
-        .usage       = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
-    };
-
-    VkBuffer vertex_buffer;
-    vkCreateBuffer(VK_DEVICE, &buffer_info, NULL, &vertex_buffer);
-
-    VkMemoryRequirements mem_requirements;
-    vkGetBufferMemoryRequirements(VK_DEVICE, vertex_buffer, &mem_requirements);
-
-    VkPhysicalDeviceMemoryProperties mem_properties;
-    vkGetPhysicalDeviceMemoryProperties(VK_PHYS_DEVICE, &mem_properties);
+    VkBuffer       staging_buffer;
+    VkDeviceMemory staging_buffer_memory;
+    create_buffer(size, 
+                  VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                  &staging_buffer,
+                  &staging_buffer_memory);
     
-    u32 mem_type_index = 0;
-    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | 
-                                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
-    for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++) {
-        if ((mem_requirements.memoryTypeBits & (1 << i)) && 
-            (mem_properties.memoryTypes[i].propertyFlags & properties) == properties) {
-            mem_type_index = i;
-            break;
-        }
-    }
-
-    VkMemoryAllocateInfo alloc_info = {
-        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .allocationSize  = mem_requirements.size,
-        .memoryTypeIndex = mem_type_index
-    };
-
-    VkDeviceMemory memory;
-    vkAllocateMemory(VK_DEVICE, &alloc_info, NULL, &memory);
-
-    vkBindBufferMemory(VK_DEVICE, vertex_buffer, memory, 0);
-
     void* data;
-    vkMapMemory(VK_DEVICE, memory, 0, buffer_info.size, 0, &data);
-    memcpy(data, vertices, buffer_info.size);
-    vkUnmapMemory(VK_DEVICE, memory);
-    append_vertex_buffer(vertex_buffer, 0, memory);
+    vkMapMemory(VK_DEVICE, staging_buffer_memory, 0, size, 0, &data);
+    memcpy(data, vertices, size);
+    vkUnmapMemory(VK_DEVICE, staging_buffer_memory);
+
+    create_buffer(size, 
+                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                  buffer,
+                  memory);
+
+    copy_buffer(staging_buffer, *buffer, size);
+
+    vkDestroyBuffer(VK_DEVICE, staging_buffer, NULL);
+    vkFreeMemory(VK_DEVICE, staging_buffer_memory, NULL);
 }
 
 void create_descriptor_set_layout(VkDescriptorSetLayout* dsl) {
@@ -1575,20 +1570,7 @@ int create_render_pipeline(VkSurfaceFormatKHR surface_format) {
         .pDynamicStates    = dynamic_states
     };
 
-    Vertex vertices[] = {
-        {{ -0.5f,  0.0f }, { 255, 0,   0,   255 }},
-        {{  0.5f,  0.0f }, { 0,   255, 0,   255 }},
-        {{  0.0f,  0.5f }, { 0,   0,   255, 255 }},
-    };
-
-    create_vertex_buffer(vertices, 3);
     create_descriptor_set_layout(&VK_DESCRIPTOR_SET_LAYOUT);
-    create_uniform_buffer(&VIEW_PROJ_UBO, sizeof(ViewProjectionUBO));
-
-    u32 model_size = 1 * UBO_ALIGNMENT;
-    create_uniform_buffer(&MODELS, model_size);
-
-    create_descriptor_set(&DESCRIPTOR_SET);
 
     VkPipelineLayoutCreateInfo layout_info = {
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -1689,4 +1671,145 @@ int create_render_pipeline(VkSurfaceFormatKHR surface_format) {
                                        &VK_PIPELINE);
 
     return 0;
+}
+
+void transform2d_to_model(Transform2d* transform, Matrix4* model) {
+    *model = matrix4_trs_2d(transform->position.x, 
+                            transform->position.y,
+                            radians(transform->rotation),
+                            transform->scale.x,
+                            transform->scale.y);
+}
+
+void transforms_init(u32 initial_size) {
+    TRANSFORMS        = Calloc(Transform2d, initial_size);
+    TRANSFORMS_COUNT  = 0;
+    TRANSFORMS_LENGTH = initial_size;
+}
+
+void transforms_resize(u32 new_size) {
+    TRANSFORMS        = Realloc(Transform2d, TRANSFORMS, sizeof(Transform2d) * new_size);
+    TRANSFORMS_LENGTH = new_size;
+}
+
+u32 transforms_append(Transform2d transform) {
+    if (TRANSFORMS_COUNT >= TRANSFORMS_LENGTH) {
+        transforms_resize(TRANSFORMS_COUNT * 2);
+    }
+
+    u32 index = TRANSFORMS_COUNT;
+    TRANSFORMS[index] = transform;
+
+    TRANSFORMS_COUNT++;
+
+    return index;
+}
+
+void transforms_set(u32 index, Transform2d* transform) {
+    TRANSFORMS[index] = *transform;
+}
+
+void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* memory) {
+    VkBufferCreateInfo buffer_info = {
+        .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size        = size,
+        .usage       = usage,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+    };
+
+    vkCreateBuffer(VK_DEVICE, &buffer_info, NULL, buffer);
+
+    VkMemoryRequirements mem_requirements;
+    vkGetBufferMemoryRequirements(VK_DEVICE, *buffer, &mem_requirements);
+
+    VkPhysicalDeviceMemoryProperties mem_properties;
+    vkGetPhysicalDeviceMemoryProperties(VK_PHYS_DEVICE, &mem_properties);
+    
+    u32 mem_type_index = 0;
+
+    for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++) {
+        if ((mem_requirements.memoryTypeBits & (1 << i)) && 
+            (mem_properties.memoryTypes[i].propertyFlags & properties) == properties) {
+            mem_type_index = i;
+            break;
+        }
+    }
+
+    VkMemoryAllocateInfo alloc_info = {
+        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize  = mem_requirements.size,
+        .memoryTypeIndex = mem_type_index
+    };
+
+    vkAllocateMemory(VK_DEVICE, &alloc_info, NULL, memory);
+
+    vkBindBufferMemory(VK_DEVICE, *buffer, *memory, 0);
+}
+
+void copy_buffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
+    VkCommandBufferAllocateInfo alloc_info = {
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool        = VK_COMMAND_POOL,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+
+    VkCommandBuffer command_buffer;
+    vkAllocateCommandBuffers(VK_DEVICE, &alloc_info, &command_buffer);
+
+    VkCommandBufferBeginInfo begin_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+
+    vkBeginCommandBuffer(command_buffer, &begin_info);
+
+    VkBufferCopy copy_region = {
+        .srcOffset = 0,
+        .dstOffset = 0,
+        .size      = size
+    };
+
+    vkCmdCopyBuffer(command_buffer, src, dst, 1, &copy_region);
+    vkEndCommandBuffer(command_buffer);
+
+    VkSubmitInfo submit = {
+        .sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers    = &command_buffer
+    };
+
+    vkQueueSubmit(VK_GRAPHICS_QUEUE, 1, &submit, VK_NULL_HANDLE);
+    vkQueueWaitIdle(VK_GRAPHICS_QUEUE);
+
+    vkFreeCommandBuffers(VK_DEVICE, VK_COMMAND_POOL, 1, &command_buffer);
+}
+
+void create_index_buffer(u16* indices, u32 index_count, VkBuffer* buffer, VkDeviceMemory* memory) {
+    u64 size = sizeof(indices[0]) * index_count;
+
+    VkBuffer       staging_buffer;
+    VkDeviceMemory staging_buffer_memory;
+    create_buffer(size, 
+                  VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                  &staging_buffer,
+                  &staging_buffer_memory);
+    
+    void* data;
+    vkMapMemory(VK_DEVICE, staging_buffer_memory, 0, size, 0, &data);
+    memcpy(data, indices, size);
+    vkUnmapMemory(VK_DEVICE, staging_buffer_memory);
+
+    create_buffer(size, 
+                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                  buffer,
+                  memory);
+
+    copy_buffer(staging_buffer, *buffer, size);
+
+    vkDestroyBuffer(VK_DEVICE, staging_buffer, NULL);
+    vkFreeMemory(VK_DEVICE, staging_buffer_memory, NULL);
 }
