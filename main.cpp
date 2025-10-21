@@ -11,10 +11,13 @@
 #include "Vector3.h"
 #include "Matrix4.h"
 #include "geometry.h"
+#include <time.h>
+#include <stdlib.h>
 
 #define VERTEX_BUFFERS_INITIAL_LENGTH 8
 #define VERTEX_BUFFERS_STEP           8
 #define UBO_ALIGNMENT                 256
+#define MAX_FRAMES                    2
 
 typedef struct QueueFamilies {
     bool graphics_supported;
@@ -43,21 +46,23 @@ typedef struct UniformBuffer {
     void*          mapped;
 } UniformBuffer;
 
-typedef struct ViewProjectionUBO {
-    alignas(16) Matrix4 view;
-    alignas(16) Matrix4 proj;
-} ViewProjectionUBO;
-
-typedef struct ModelUBO {
-    alignas(16) Matrix4 model;
-    alignas(16) Matrix4 mvp;
-} ModelUBO;
+typedef struct PerFrameData {
+    Matrix4 view;
+    Matrix4 proj;
+    float   time;
+    float   dt;
+} PerFrameData;
 
 typedef struct Transform2d {
     Vector2 position;
     Vector2 scale;
     float   rotation;
 } Transform2d;
+
+typedef struct Matrices {
+    Matrix4 model;
+    Matrix4 mvp;
+} Matrices;
 
 Window*          WINDOW{};
 VkInstance       VK_INSTANCE{};
@@ -81,31 +86,48 @@ VkBuffer         VERTEX_BUFFER{};
 VkDeviceMemory   VERTEX_BUFFER_MEMORY{};
 VkBuffer         INDEX_BUFFER{};
 VkDeviceMemory   INDEX_BUFFER_MEMORY{};
-VkDescriptorSetLayout VK_DESCRIPTOR_SET_LAYOUT{};
-UniformBuffer         VIEW_PROJ_UBO;
-UniformBuffer         MODELS;
-VkDescriptorPool      DESCRIPTOR_POOL;
-VkDescriptorSet       DESCRIPTOR_SET;
+VkDescriptorSetLayout PER_FRAME_SET_LAYOUT{};
+VkDescriptorSetLayout MATRIX_SET_LAYOUT{};
+UniformBuffer         PER_FRAME_UBO[MAX_FRAMES];
+VkDescriptorPool      DESCRIPTOR_POOL[MAX_FRAMES];
+VkDescriptorSet       DESCRIPTOR_SET[MAX_FRAMES];
+VkDescriptorPool      MATRIX_DESCRIPTOR_POOL;
+VkDescriptorSet       MATRIX_DESCRIPTOR_SET;
 VkShaderModule        VERT{};
 VkShaderModule        FRAG{};
 
-Transform2d* TRANSFORMS;
-u32          TRANSFORMS_COUNT  = 0;
-u32          TRANSFORMS_LENGTH = 0;
+Transform2d*   TRANSFORMS;
+Matrices*      MATRICES;
+VkBuffer       MATRIX_BUFFER;
+VkDeviceMemory MATRIX_MEMORY;
+u32            TRANSFORMS_COUNT  = 0;
+u32            TRANSFORMS_LENGTH = 0;
 
-VkFence     VK_SINGLE_FRAME_FENCE{};
-VkSemaphore VK_SEMAPHORE_IMAGE_READY{};
-VkSemaphore VK_SEMAPHORE_RENDER_FINISHED{};
+VkFence     VK_SINGLE_FRAME_FENCE;
+VkSemaphore VK_SEMAPHORE_IMAGE_READY;
+VkSemaphore VK_SEMAPHORE_RENDER_FINISHED[MAX_FRAMES];
 
 Matrix4 VIEW;
 Matrix4 PROJECTION;
-Matrix4 MODEL;
 
 Camera2D CAMERA = {};
 
-double TIME{};
+double TIME_DOUBLE = 0.0l;
+float  TIME        = 0.0f;
+float  DT          = 0.0f;
 
 void print_instance_extensions();
+
+static inline float frand01() {
+    return (float)rand() / RAND_MAX;
+}
+
+static inline float frand(float min, float max) {
+    float t = frand01();
+    return (1.0f - t) * min + t * max;
+}
+
+static inline void matrix4_mvp(Camera2D* camera, Vector2 position, float rotation, Vector2 scale, Matrix4* mat);
 
 VkResult create_vk_instance(const char** extensions, u32 extensions_count);
 int      get_phys_device();
@@ -119,14 +141,15 @@ int      create_render_pipeline(VkSurfaceFormatKHR surface_format);
 
 void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* memory);
 void copy_buffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
+void set_memory(VkDeviceMemory memory, VkDeviceSize size, void* src);
+void destroy_buffer(VkBuffer buffer, VkDeviceMemory memory);
 bool create_shader_module(VkDevice device, const char* name, VkShaderModule* shader_module);
 void create_vertex_buffer(Vertex* vertices, u32 vertex_count, VkBuffer* buffer, VkDeviceMemory* memory);
 void create_index_buffer(u16* indices, u32 index_count, VkBuffer* buffer, VkDeviceMemory* memory);
-void create_descriptor_set_layout(VkDescriptorSetLayout* dsl);
+void create_descriptor_set_layout(VkDescriptorSetLayoutBinding* bindings, u32 bindings_count, VkDescriptorSetLayout* dsl);
 void create_uniform_buffer(UniformBuffer* ub, u32 size);
-void create_descriptor_set(VkDescriptorSet* descriptor_set);
-void update_view_projection(UniformBuffer* ubo, ViewProjectionUBO* view_proj);
-void update_model(UniformBuffer* ubo, ModelUBO* model, u32 index);
+void create_descriptor_set(VkDescriptorSet* descriptor_set, u32 image_index);
+void update_per_frame_data(UniformBuffer* ubo, PerFrameData* data);
 void camera2d_make(Vector2 position, float size, Camera2D* cam);
 void camera2d_update(Camera2D* cam);
 void camera2d_move(Camera2D* cam, Vector2 dir);
@@ -136,10 +159,13 @@ void transforms_init(u32 initial_size);
 u32  transforms_append(Transform2d transform);
 void transforms_set(u32 index, Transform2d* transform);
 
+static inline void update_matrices(Transform2d* transforms, Matrices* matrices, u32 count, VkDeviceMemory mem);
+
 int main(int argc, char** argv) {
+    srand(time(NULL));
     const char* name         = "Hello";
 
-    GlassErrorCode err = glass_create_window(100, 100, 800, 600, name, &WINDOW);
+    GlassErrorCode err = glass_create_window(100, 100, 1280, 720, name, &WINDOW);
     if (err != GLASS_OK) {
         printf("Cannot create window. %d\n", err);
         return 1;
@@ -343,8 +369,6 @@ int main(int argc, char** argv) {
     printf("Frame buffers created.\n");
 
     // create command pool
-    // VkCommandPool command_pool;
-
     VkCommandPoolCreateInfo command_pool_info = {
         .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .pNext            = NULL,
@@ -398,9 +422,12 @@ int main(int argc, char** argv) {
         .flags = VK_FENCE_CREATE_SIGNALED_BIT
     };
 
-    vkCreateSemaphore(VK_DEVICE, &image_ready_semaphore_info,     NULL, &VK_SEMAPHORE_IMAGE_READY);
-    vkCreateSemaphore(VK_DEVICE, &render_finished_semaphore_info, NULL, &VK_SEMAPHORE_RENDER_FINISHED);
     vkCreateFence    (VK_DEVICE, &single_frame_fence_info,        NULL, &VK_SINGLE_FRAME_FENCE);
+    vkCreateSemaphore(VK_DEVICE, &image_ready_semaphore_info,     NULL, &VK_SEMAPHORE_IMAGE_READY);
+    
+    for (u32 i = 0; i < MAX_FRAMES; i++) {
+        vkCreateSemaphore(VK_DEVICE, &render_finished_semaphore_info, NULL, &VK_SEMAPHORE_RENDER_FINISHED[i]);
+    }
 
     vkGetDeviceQueue(VK_DEVICE,
                      QUEUES.graphics,
@@ -411,12 +438,6 @@ int main(int argc, char** argv) {
                      QUEUES.present,
                      0,
                      &VK_PRESENT_QUEUE);
-
-    // Vertex vertices[] = {
-    //     {{ -0.5f,  0.0f }, { 255, 0,   0,   255 }},
-    //     {{  0.5f,  0.0f }, { 0,   255, 0,   255 }},
-    //     {{  0.0f,  0.5f }, { 0,   0,   255, 255 }},
-    // };
 
     Vertex vertices[] = {
         {{   0.5f,  -0.5f }, { 255, 0,   0,   255 }},
@@ -432,12 +453,62 @@ int main(int argc, char** argv) {
     create_vertex_buffer(vertices, 4, &VERTEX_BUFFER, &VERTEX_BUFFER_MEMORY);
     create_index_buffer(indices, 6, &INDEX_BUFFER, &INDEX_BUFFER_MEMORY);
 
-    create_uniform_buffer(&VIEW_PROJ_UBO, sizeof(ViewProjectionUBO));
+    for (u32 i = 0; i < MAX_FRAMES; i++) {
+        create_uniform_buffer(&PER_FRAME_UBO[i], sizeof(PerFrameData));
+    }
 
-    u32 model_size = 1 * UBO_ALIGNMENT;
-    create_uniform_buffer(&MODELS, model_size);
+    transforms_init(32);
 
-    create_descriptor_set(&DESCRIPTOR_SET);
+    for (u32 i = 0; i < MAX_FRAMES; i++) {
+        create_descriptor_set(&DESCRIPTOR_SET[i], i);
+    }
+
+    VkDescriptorPoolSize pool_sizes[] = {
+        {
+            .type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .descriptorCount = 1
+        },
+    };
+
+    VkDescriptorPoolCreateInfo pool_info = {
+        .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets       = 1,
+        .poolSizeCount = 1,
+        .pPoolSizes    = pool_sizes,
+    };
+
+    vkCreateDescriptorPool(VK_DEVICE, &pool_info, NULL, &MATRIX_DESCRIPTOR_POOL);
+
+    // Allocate descriptor set
+    VkDescriptorSetAllocateInfo alloc_info = {
+        .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool     = MATRIX_DESCRIPTOR_POOL,
+        .descriptorSetCount = 1,
+        .pSetLayouts        = &MATRIX_SET_LAYOUT,
+    };
+
+    vkAllocateDescriptorSets(VK_DEVICE, &alloc_info, &MATRIX_DESCRIPTOR_SET);
+
+    // Update descriptor set
+    VkDescriptorBufferInfo buffer_info = {
+        .buffer = MATRIX_BUFFER,
+        .offset = 0,
+        .range  = sizeof(Matrices) * TRANSFORMS_LENGTH,
+    };
+
+    VkWriteDescriptorSet descriptor_writes[] = {
+    {
+        .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet          = MATRIX_DESCRIPTOR_SET,
+        .dstBinding      = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .pBufferInfo     = &buffer_info,
+    },
+    };
+
+    vkUpdateDescriptorSets(VK_DEVICE, 1, descriptor_writes, 0, NULL);
 
     camera2d_make(vector2_make(0, 0), 4, &CAMERA);
     camera2d_update(&CAMERA);
@@ -450,36 +521,9 @@ int main(int argc, char** argv) {
 
     const float rotation_speed = 10.0f;
     float speed                = 2.0f;
-    transforms_init(32);
     u32 tindex = transforms_append(transform);
-    transform2d_to_model(&transform, &MODEL);
 
-    ViewProjectionUBO view_proj = {
-        .view = VIEW,
-        .proj = PROJECTION
-    };
-
-    Matrix4 mvp = matrix4_mvp(CAMERA.position.x,
-                              CAMERA.position.y,
-                              CAMERA.left,
-                              CAMERA.right,
-                              CAMERA.top,
-                              CAMERA.bottom,
-                              transform.position.x,
-                              transform.position.y,
-                              radians(transform.rotation),
-                              transform.scale.x,
-                              transform.scale.y);
-
-    ModelUBO ubo = {
-        .model = MODEL,
-        .mvp   = mvp
-    };
-
-    update_view_projection(&VIEW_PROJ_UBO, &view_proj);
-    update_model(&MODELS, &ubo, 0);
-
-    TIME = glass_get_time();
+    double last_time = glass_get_time();
 
     while (true) {
         if (glass_is_button_pressed(GLASS_SCANCODE_ESCAPE)) {
@@ -491,12 +535,15 @@ int main(int argc, char** argv) {
             break;
         
         double current_time = glass_get_time();
-        double actual_dt    = current_time - TIME;
-               TIME         = current_time;
+        double actual_dt    = current_time - last_time;
+               TIME_DOUBLE  += actual_dt;
         int    fps          = (int)(1.0l / actual_dt);
+        last_time = current_time;
         char buf[128];
-        float dt = (float)actual_dt;
-        sprintf(buf, "fps: %i", fps);
+        float dt   = (float)actual_dt;
+              DT   = dt;
+              TIME = float(TIME_DOUBLE);
+        sprintf(buf, "fps: %i, dt:%f, time:%f", fps, dt, TIME);
         glass_set_window_title(WINDOW, buf);
 
         transform.rotation += rotation_speed * dt;
@@ -528,28 +575,22 @@ int main(int argc, char** argv) {
             camera_move.x += camera_speed * dt;
         }
 
+        if (glass_is_button_pressed(GLASS_SCANCODE_SPACE)) {
+            Transform2d trans = {
+                .position = {{frand(-2, 2), frand(-2, 2)}},
+                .scale    = {{1, 1}},
+                .rotation = 45.0f,
+            };
+
+            transforms_append(trans);
+        }
+
+        printf("Transforms count: %d\n", TRANSFORMS_COUNT);
+
         camera2d_move(&CAMERA, camera_move);
+
         transforms_set(tindex, &transform);
-        transform2d_to_model(&transform, &MODEL);
-
-        Matrix4 mvp = matrix4_mvp(CAMERA.position.x,
-                                  -CAMERA.position.y,
-                                  CAMERA.left,
-                                  CAMERA.right,
-                                  CAMERA.top,
-                                  CAMERA.bottom,
-                                  transform.position.x,
-                                  transform.position.y,
-                                  radians(transform.rotation),
-                                  transform.scale.x,
-                                  transform.scale.y);
-
-        ModelUBO ubo = {
-            .model = MODEL,
-            .mvp   = mvp
-        };
-
-        update_model(&MODELS, &ubo, 0);
+        update_matrices(TRANSFORMS, MATRICES, TRANSFORMS_COUNT, MATRIX_MEMORY);
         glass_main_loop();
     }
 
@@ -557,23 +598,26 @@ int main(int argc, char** argv) {
 
     vkDeviceWaitIdle(VK_DEVICE);
 
-    vkDestroyBuffer(VK_DEVICE, VERTEX_BUFFER, NULL);
-    vkFreeMemory(VK_DEVICE, VERTEX_BUFFER_MEMORY, NULL);
+    destroy_buffer(VERTEX_BUFFER, VERTEX_BUFFER_MEMORY);
+    destroy_buffer(INDEX_BUFFER, INDEX_BUFFER_MEMORY);
+    destroy_buffer(MATRIX_BUFFER, MATRIX_MEMORY);
 
-    vkDestroyBuffer(VK_DEVICE, INDEX_BUFFER, NULL);
-    vkFreeMemory(VK_DEVICE, INDEX_BUFFER_MEMORY, NULL);
-    // destroy_vertex_buffers();
-    vkDestroyDescriptorPool(VK_DEVICE, DESCRIPTOR_POOL, NULL);
-    vkDestroyDescriptorSetLayout(VK_DEVICE, VK_DESCRIPTOR_SET_LAYOUT, NULL);
-    vkDestroyBuffer(VK_DEVICE, VIEW_PROJ_UBO.buffer, NULL);
-    vkFreeMemory(VK_DEVICE, VIEW_PROJ_UBO.mem, NULL);
+    for (u32 i = 0; i < MAX_FRAMES; i++) {
+        vkDestroyDescriptorPool(VK_DEVICE, DESCRIPTOR_POOL[i], NULL);
+        vkDestroyBuffer(VK_DEVICE, PER_FRAME_UBO[i].buffer, NULL);
+        vkFreeMemory(VK_DEVICE, PER_FRAME_UBO[i].mem, NULL);
+    }
 
-    vkDestroyBuffer(VK_DEVICE, MODELS.buffer, NULL);
-    vkFreeMemory(VK_DEVICE, MODELS.mem, NULL);
+    vkDestroyDescriptorPool(VK_DEVICE, MATRIX_DESCRIPTOR_POOL, NULL);
+
+    vkDestroyDescriptorSetLayout(VK_DEVICE, PER_FRAME_SET_LAYOUT, NULL);
+    vkDestroyDescriptorSetLayout(VK_DEVICE, MATRIX_SET_LAYOUT, NULL);
     
     vkDestroySemaphore(VK_DEVICE, VK_SEMAPHORE_IMAGE_READY, NULL);
-    vkDestroySemaphore(VK_DEVICE, VK_SEMAPHORE_RENDER_FINISHED, NULL);
     vkDestroyFence(VK_DEVICE, VK_SINGLE_FRAME_FENCE, NULL);
+    for (u32 i = 0; i < MAX_FRAMES; i++) {
+        vkDestroySemaphore(VK_DEVICE, VK_SEMAPHORE_RENDER_FINISHED[i], NULL);
+    }
 
     vkDestroyCommandPool(VK_DEVICE, VK_COMMAND_POOL, NULL);
 
@@ -595,92 +639,6 @@ int main(int argc, char** argv) {
     vkDestroyInstance(VK_INSTANCE, null);
 
     glass_destroy_window(WINDOW);
-
-    Vector3 a = {.x = 1, .y = 2, .z = 3};
-    Vector3 b = {.x = 3, .y = 2, .z = 1};
-
-    // Vector3 c = a + b;
-    a += b;
-
-    Matrix4 mat = matrix4_make(1, 2, 3, 4,
-                               5, 6, 7, 8,
-                               9, 10, 11, 12,
-                               13, 14, 15, 16);
-
-    Matrix4 mat2 = matrix4_make(1, 2, 3, 4,
-                                5, 6, 7, 8,
-                                9, 10, 11, 12,
-                                13, 14, 15, 16);
-
-    printf("(%f, %f, %f)\n", a.x, a.y, a.z);
-
-    for (u32 i = 0; i < 16; i++) {
-        if (i % 4 == 0) printf("\n");
-
-        printf("%f,", mat.e[i]);
-    }
-
-    printf("\n");
-
-    for (u32 i = 0; i < 16; i++) {
-        if (i % 4 == 0) printf("\n");
-
-        printf("%f,", mat2.e[i]);
-    }
-    printf("\n");
-
-    Matrix4 mat3 = matrix4_add(&mat, &mat2);
-
-    for (u32 i = 0; i < 16; i++) {
-        if (i % 4 == 0) printf("\n");
-
-        printf("%f,", mat3.e[i]);
-    }
-    printf("\n");
-
-    mat3 = matrix4_sub(&mat3, &mat2);
-
-    for (u32 i = 0; i < 16; i++) {
-        if (i % 4 == 0) printf("\n");
-
-        printf("%f,", mat3.e[i]);
-    }
-    printf("\n");
-
-    mat3 = matrix4_mul(&mat, &mat2);
-
-    for (u32 i = 0; i < 16; i++) {
-        if (i % 4 == 0) printf("\n");
-
-        printf("%f,", mat3.e[i]);
-    }
-    printf("\n");
-
-    float det = matrix4_det(&mat);
-
-    printf("%f\n", det);
-
-    printf("\n");
-
-    float positions[] = {1, 2, 3, 4, 5, 6};  // 24
-    Color colors[] = {{255, 255, 255, 255},  // 4
-                      {255, 255, 255, 255},  // 4
-                      {255, 255, 255, 255}}; // 4
-
-    Shape2D shape;
-
-    shape2d_make(positions, colors, 3, &Allocator_Std, &shape);
-
-    printf("%d\n", shape.vertex_count);
-
-    for (u32 i = 0; i < shape.vertex_count; i++) {
-        Vertex2D vertex = shape.vertices[i];
-        Color    color  = shape.colors[i];
-        printf("%f, %f, %ir, %ig, %ib, %ia\n", vertex.position.x, vertex.position.y, color.r, color.g, color.b, color.a);
-    }
-
-    shape2d_free(&shape, &Allocator_Std);
-
     return 0;
 }
 
@@ -697,6 +655,15 @@ GlassErrorCode glass_render() {
                             &image_index);
     
     vkResetCommandBuffer(VK_COMMAND_BUFFER, 0);
+
+    PerFrameData per_frame_data = {
+        .view = VIEW,
+        .proj = PROJECTION,
+        .time = TIME,
+        .dt   = DT
+    };
+
+    update_per_frame_data(&PER_FRAME_UBO[image_index], &per_frame_data);
     
     // record command buffer
     VkCommandBufferBeginInfo begin_info = {
@@ -733,15 +700,14 @@ GlassErrorCode glass_render() {
     vkCmdSetScissor(VK_COMMAND_BUFFER, 0, 1, &VK_SCISSORS);
 
     // printf("Binding %d buffers\n", VERTEX_BUFFERS_COUNT);
-    u32 dynamic_offset = 0;
-    vkCmdBindDescriptorSets(VK_COMMAND_BUFFER, VK_PIPELINE_BIND_POINT_GRAPHICS, VK_PIPELINE_LAYOUT, 0, 1, &DESCRIPTOR_SET, 1, &dynamic_offset);
+    VkDescriptorSet descriptor_sets[] = {DESCRIPTOR_SET[image_index], MATRIX_DESCRIPTOR_SET};
+    vkCmdBindDescriptorSets(VK_COMMAND_BUFFER, VK_PIPELINE_BIND_POINT_GRAPHICS, VK_PIPELINE_LAYOUT, 0, 2, descriptor_sets, 0, NULL);
 
     const VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(VK_COMMAND_BUFFER, 0, 1, &VERTEX_BUFFER, offsets);
     vkCmdBindIndexBuffer(VK_COMMAND_BUFFER, INDEX_BUFFER, 0, VK_INDEX_TYPE_UINT16);
 
-    // vkCmdDraw(VK_COMMAND_BUFFER, 3, 1, 0, 0);
-    vkCmdDrawIndexed(VK_COMMAND_BUFFER, 6, 1, 0, 0, 0);
+    vkCmdDrawIndexed(VK_COMMAND_BUFFER, 6, TRANSFORMS_COUNT, 0, 0, 0);
     
     vkCmdEndRenderPass(VK_COMMAND_BUFFER);
     auto result = vkEndCommandBuffer(VK_COMMAND_BUFFER);
@@ -762,7 +728,7 @@ GlassErrorCode glass_render() {
         .commandBufferCount   = 1,
         .pCommandBuffers      = &VK_COMMAND_BUFFER,
         .signalSemaphoreCount = 1,
-        .pSignalSemaphores    = &VK_SEMAPHORE_RENDER_FINISHED
+        .pSignalSemaphores    = &VK_SEMAPHORE_RENDER_FINISHED[image_index]
     };
 
     result = vkQueueSubmit(VK_GRAPHICS_QUEUE, 1, &submit_info, VK_SINGLE_FRAME_FENCE);
@@ -775,7 +741,7 @@ GlassErrorCode glass_render() {
     VkPresentInfoKHR present_info = {
         .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores    = &VK_SEMAPHORE_RENDER_FINISHED,
+        .pWaitSemaphores    = &VK_SEMAPHORE_RENDER_FINISHED[image_index],
         .swapchainCount     = 1,
         .pSwapchains        = &VK_SWAPCHAIN,
         .pImageIndices      = &image_index
@@ -898,27 +864,10 @@ void create_vertex_buffer(Vertex* vertices, u32 vertex_count, VkBuffer* buffer, 
     vkFreeMemory(VK_DEVICE, staging_buffer_memory, NULL);
 }
 
-void create_descriptor_set_layout(VkDescriptorSetLayout* dsl) {
-    VkDescriptorSetLayoutBinding bindings[2] = {};
-    
-    bindings[0] = {
-        .binding            = 0,
-        .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .descriptorCount    = 1,
-        .stageFlags         = VK_SHADER_STAGE_VERTEX_BIT,
-        .pImmutableSamplers = NULL,
-    };
-    bindings[1] = {
-        .binding            = 1,
-        .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-        .descriptorCount    = 1,
-        .stageFlags         = VK_SHADER_STAGE_VERTEX_BIT,
-        .pImmutableSamplers = NULL,
-    };
-
+void create_descriptor_set_layout(VkDescriptorSetLayoutBinding* bindings, u32 bindings_count, VkDescriptorSetLayout* dsl) {
     VkDescriptorSetLayoutCreateInfo layout_info = {
         .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 2,
+        .bindingCount = bindings_count,
         .pBindings    = bindings
     };
 
@@ -963,52 +912,42 @@ void create_uniform_buffer(UniformBuffer* ub, u32 size) {
     vkMapMemory(VK_DEVICE, ub->mem, 0, size, 0, &ub->mapped);
 }
 
-void create_descriptor_set(VkDescriptorSet* descriptor_set) {
+void create_descriptor_set(VkDescriptorSet* descriptor_set, u32 image_index) {
     // Create descriptor pool
-    VkDescriptorPoolSize pool_sizes[2] = {
+    VkDescriptorPoolSize pool_sizes[] = {
         {
             .type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .descriptorCount = 1
         },
-        {
-            .type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-            .descriptorCount = 1,
-        }
     };
 
     VkDescriptorPoolCreateInfo pool_info = {
         .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .maxSets       = 1,
-        .poolSizeCount = 2,
+        .poolSizeCount = 1,
         .pPoolSizes    = pool_sizes,
     };
 
-    vkCreateDescriptorPool(VK_DEVICE, &pool_info, NULL, &DESCRIPTOR_POOL);
+    vkCreateDescriptorPool(VK_DEVICE, &pool_info, NULL, &DESCRIPTOR_POOL[image_index]);
 
     // Allocate descriptor set
     VkDescriptorSetAllocateInfo alloc_info = {
         .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool     = DESCRIPTOR_POOL,
+        .descriptorPool     = DESCRIPTOR_POOL[image_index],
         .descriptorSetCount = 1,
-        .pSetLayouts        = &VK_DESCRIPTOR_SET_LAYOUT,
+        .pSetLayouts        = &PER_FRAME_SET_LAYOUT,
     };
 
     vkAllocateDescriptorSets(VK_DEVICE, &alloc_info, descriptor_set);
 
     // Update descriptor set
     VkDescriptorBufferInfo view_proj_buffer_info = {
-        .buffer = VIEW_PROJ_UBO.buffer,
+        .buffer = PER_FRAME_UBO[image_index].buffer,
         .offset = 0,
-        .range  = sizeof(ViewProjectionUBO),
+        .range  = sizeof(PerFrameData),
     };
 
-    VkDescriptorBufferInfo model_buffer_info = {
-        .buffer = MODELS.buffer,
-        .offset = 0,
-        .range  = sizeof(ModelUBO)
-    };
-
-    VkWriteDescriptorSet descriptor_writes[2] = {
+    VkWriteDescriptorSet descriptor_writes[] = {
     {
         .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet          = *descriptor_set,
@@ -1018,27 +957,13 @@ void create_descriptor_set(VkDescriptorSet* descriptor_set) {
         .descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .pBufferInfo     = &view_proj_buffer_info,
     },
-    {
-        .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet          = *descriptor_set,
-        .dstBinding      = 1,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-        .pBufferInfo     = &model_buffer_info,
-    }
     };
 
-    vkUpdateDescriptorSets(VK_DEVICE, 2, descriptor_writes, 0, NULL);
+    vkUpdateDescriptorSets(VK_DEVICE, 1, descriptor_writes, 0, NULL);
 }
 
-void update_view_projection(UniformBuffer* ubo, ViewProjectionUBO* view_proj) {
-    memcpy(ubo->mapped, view_proj, sizeof(ViewProjectionUBO));
-}
-
-void update_model(UniformBuffer* ubo, ModelUBO* model, u32 index) {
-    u32 offset = index * UBO_ALIGNMENT;
-    memcpy((char*)ubo->mapped + offset, model, sizeof(ModelUBO));
+void update_per_frame_data(UniformBuffer* ubo, PerFrameData* data) {
+    memcpy(ubo->mapped, data, sizeof(PerFrameData));
 }
 
 void camera2d_make(Vector2 position, float size, Camera2D* cam) {
@@ -1058,13 +983,6 @@ void camera2d_update(Camera2D* cam) {
 
     VIEW       = matrix4_transform_2d(-cam->position.x, -cam->position.y);
     PROJECTION = matrix4_ortho_2d(cam->left, cam->right, cam->top, cam->bottom);
-
-    ViewProjectionUBO view_proj = {
-        .view = VIEW,
-        .proj = PROJECTION
-    };
-
-    update_view_projection(&VIEW_PROJ_UBO, &view_proj);
 }
 
 void camera2d_move(Camera2D* cam, Vector2 dir) {
@@ -1411,9 +1329,6 @@ int create_swapchain(VkSurfaceCapabilitiesKHR surface_capabilities, VkSurfaceFor
 }
 
 int create_render_pipeline(VkSurfaceFormatKHR surface_format) {
-    // VkShaderModule vert_shader = {};
-    // VkShaderModule frag_shader = {};
-
     if (!create_shader_module(VK_DEVICE, "vert.spv", &VERT)) {
         printf("Failed to create vertex shader.\n");
         return 1;
@@ -1570,14 +1485,35 @@ int create_render_pipeline(VkSurfaceFormatKHR surface_format) {
         .pDynamicStates    = dynamic_states
     };
 
-    create_descriptor_set_layout(&VK_DESCRIPTOR_SET_LAYOUT);
+    VkDescriptorSetLayoutBinding frame_bindings[] = {
+    {
+        .binding            = 0,
+        .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount    = 1,
+        .stageFlags         = VK_SHADER_STAGE_VERTEX_BIT,
+        .pImmutableSamplers = NULL,
+    }};
+
+    VkDescriptorSetLayoutBinding matrix_bindings[] = {
+    {
+        .binding            = 0,
+        .descriptorType     = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .descriptorCount    = 1,
+        .stageFlags         = VK_SHADER_STAGE_VERTEX_BIT,
+        .pImmutableSamplers = NULL,
+    }};
+
+    create_descriptor_set_layout(frame_bindings, 1, &PER_FRAME_SET_LAYOUT);
+    create_descriptor_set_layout(matrix_bindings, 1, &MATRIX_SET_LAYOUT);
+
+    VkDescriptorSetLayout set_layouts[] = {PER_FRAME_SET_LAYOUT, MATRIX_SET_LAYOUT};
 
     VkPipelineLayoutCreateInfo layout_info = {
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext                  = NULL,
         .flags                  = 0,
-        .setLayoutCount         = 1,
-        .pSetLayouts            = &VK_DESCRIPTOR_SET_LAYOUT,
+        .setLayoutCount         = 2,
+        .pSetLayouts            = set_layouts,
         .pushConstantRangeCount = 0,
         .pPushConstantRanges    = NULL
     };
@@ -1683,13 +1619,55 @@ void transform2d_to_model(Transform2d* transform, Matrix4* model) {
 
 void transforms_init(u32 initial_size) {
     TRANSFORMS        = Calloc(Transform2d, initial_size);
+    MATRICES          = Calloc(Matrices, initial_size);
     TRANSFORMS_COUNT  = 0;
     TRANSFORMS_LENGTH = initial_size;
+
+    create_buffer(sizeof(Matrices) * initial_size, 
+                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
+                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                  &MATRIX_BUFFER,
+                  &MATRIX_MEMORY);
 }
 
 void transforms_resize(u32 new_size) {
     TRANSFORMS        = Realloc(Transform2d, TRANSFORMS, sizeof(Transform2d) * new_size);
+    MATRICES          = Realloc(Matrices, MATRICES, sizeof(Matrices) * new_size);
     TRANSFORMS_LENGTH = new_size;
+
+    vkWaitForFences(VK_DEVICE, 1, &VK_SINGLE_FRAME_FENCE, VK_TRUE, u64_max);
+
+    destroy_buffer(MATRIX_BUFFER, MATRIX_MEMORY);
+
+    create_buffer(sizeof(Matrices) * new_size, 
+                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
+                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                  &MATRIX_BUFFER,
+                  &MATRIX_MEMORY);
+
+    set_memory(MATRIX_MEMORY, sizeof(Matrices) * new_size, MATRICES);
+
+    VkDescriptorBufferInfo buffer_info = {
+        .buffer = MATRIX_BUFFER,
+        .offset = 0,
+        .range  = sizeof(Matrices) * TRANSFORMS_LENGTH,
+    };
+
+    VkWriteDescriptorSet descriptor_writes[] = {
+    {
+        .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet          = MATRIX_DESCRIPTOR_SET,
+        .dstBinding      = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .pBufferInfo     = &buffer_info,
+    },
+    };
+
+    vkUpdateDescriptorSets(VK_DEVICE, 1, descriptor_writes, 0, NULL);
 }
 
 u32 transforms_append(Transform2d transform) {
@@ -1699,7 +1677,8 @@ u32 transforms_append(Transform2d transform) {
 
     u32 index = TRANSFORMS_COUNT;
     TRANSFORMS[index] = transform;
-
+    transform2d_to_model(&transform, &MATRICES[index].model);
+    matrix4_mvp(&CAMERA, transform.position, transform.rotation, transform.scale, &MATRICES[index].mvp);
     TRANSFORMS_COUNT++;
 
     return index;
@@ -1785,6 +1764,18 @@ void copy_buffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
     vkFreeCommandBuffers(VK_DEVICE, VK_COMMAND_POOL, 1, &command_buffer);
 }
 
+void set_memory(VkDeviceMemory memory, VkDeviceSize size, void* src) {
+    void* data;
+    vkMapMemory(VK_DEVICE, memory, 0, size, 0, &data);
+    memcpy(data, src, size);
+    vkUnmapMemory(VK_DEVICE, memory);
+}
+
+void destroy_buffer(VkBuffer buffer, VkDeviceMemory memory) {
+    vkDestroyBuffer(VK_DEVICE, buffer, NULL);
+    vkFreeMemory(VK_DEVICE, memory, NULL);
+}
+
 void create_index_buffer(u16* indices, u32 index_count, VkBuffer* buffer, VkDeviceMemory* memory) {
     u64 size = sizeof(indices[0]) * index_count;
 
@@ -1812,4 +1803,17 @@ void create_index_buffer(u16* indices, u32 index_count, VkBuffer* buffer, VkDevi
 
     vkDestroyBuffer(VK_DEVICE, staging_buffer, NULL);
     vkFreeMemory(VK_DEVICE, staging_buffer_memory, NULL);
+}
+
+static inline void matrix4_mvp(Camera2D* camera, Vector2 position, float rotation, Vector2 scale, Matrix4* mat) {
+    *mat = matrix4_mvp(camera->position.x, -camera->position.y, camera->left, camera->right, camera->top, camera->bottom, position.x, position.y, radians(rotation), scale.x, scale.y);
+}
+
+static inline void update_matrices(Transform2d* transforms, Matrices* matrices, u32 count, VkDeviceMemory mem) {
+    for (u32 i = 0; i < count; i++) {
+        transform2d_to_model(&transforms[i], &MATRICES[i].model);
+        matrix4_mvp(&CAMERA, transforms[i].position, transforms[i].rotation, transforms[i].scale, &MATRICES[i].mvp);
+    }
+    VkDeviceSize size = sizeof(Matrices) * count;
+    set_memory(mem, size, matrices);
 }
