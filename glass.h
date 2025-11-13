@@ -10,6 +10,7 @@ enum ScreenMode {
 
 struct Window;
 struct Surface;
+struct Application;
 
 struct ScreenParams {
     u32 width;
@@ -140,6 +141,7 @@ extern void           glass_exit();
 extern bool           glass_exit_required();
 extern void           glass_main_loop();
 
+extern void           glass_get_window_size(Window* window, u32* width, u32* height);
 extern ScreenParams   glass_get_current_screen_params(Window* window);
 extern void           glass_set_screen_params(Window* window, ScreenParams params);
 extern void           glass_set_window_size(Window* window, u32 width, u32 height);
@@ -160,7 +162,8 @@ extern HINSTANCE glass_win32_get_instance(Window* window);
 #endif
 
 // rendering
-extern GlassErrorCode glass_create_surface(Window* window, Surface* surface);
+// extern GlassErrorCode glass_create_surface(Window* window, Surface* surface);
+// extern GlassErrorCode glass_render_init(Window* window, Application* app);
 
 #if defined(Vulkan)
 #include <vulkan/vulkan.h>

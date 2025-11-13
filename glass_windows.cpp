@@ -141,6 +141,11 @@ double glass_get_time() {
     return (double)time.QuadPart / frequency.QuadPart;
 }
 
+void glass_get_window_size(Window* window, u32* width, u32* height) {
+    *width  = window->width;
+    *height = window->height;
+}
+
 void glass_set_window_title(Window* window, char* title) {
     SetWindowTextA(window->window, title);
 }

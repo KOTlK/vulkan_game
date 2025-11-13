@@ -9,14 +9,15 @@ typedef struct Color {
 
 typedef struct Vertex2D {
     Vector2 position;
+    Color   color;
 } Vertex2D;
 
 typedef struct Shape2D {
     Vertex2D* vertices;
-    Color*    colors;
+    u16*      indices;
     u32       vertex_count;
+    u32       index_count;
 } Shape2D;
 
-// make 2d shape. positions - [xyxyxyxyxy]
-void shape2d_make(float* positions, Color* colors, u32 vertex_count, Allocator* allocator, Shape2D* shape);
-void shape2d_free(Shape2D* shape, Allocator* allocator);
+void shape2d_make(Vertex2D* vertices, u16* indices, u32 vertex_count, u32 index_count, Shape2D* shape);
+void shape2d_free(Shape2D* shape);

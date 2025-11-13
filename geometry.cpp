@@ -1,19 +1,21 @@
 #include "geometry.h"
+#include "basic.h"
 #include <memory.h>
 
-void shape2d_make(float* positions, Color* colors, u32 vertex_count, Allocator* allocator, Shape2D* shape) {
-    u32 size = sizeof(float) * 2 * vertex_count + sizeof(Color) * vertex_count;
-    char* data          = (char*)allocator_alloc(allocator, size);
-    u32   colors_offset = sizeof(float) * 2 * vertex_count;
+void shape2d_make(Vertex2D* vertices, u16* indices, u32 vertex_count, u32 index_count, Shape2D* shape) {
+    u32   size = sizeof(Vertex2D) * vertex_count + sizeof(u16) * index_count;
+    char* data = Malloc(char, size);
+    u32   index_offset = sizeof(Vertex2D) * vertex_count;
 
-    memcpy(data, positions, colors_offset);
-    memcpy(&data[colors_offset], colors, sizeof(Color) * vertex_count);
+    memcpy(data, vertices, index_offset);
+    memcpy(&data[index_offset], indices, sizeof(u16) * index_count);
 
     shape->vertices     = (Vertex2D*)data;
-    shape->colors       = (Color*)(data + colors_offset);
+    shape->indices      = (u16*)(data + index_offset);
     shape->vertex_count = vertex_count;
+    shape->index_count  = index_count;
 }
 
-void shape2d_free(Shape2D* shape, Allocator* allocator) {
-    allocator_free(allocator, shape->vertices);
+void shape2d_free(Shape2D* shape) {
+    Free(shape->vertices);
 }
