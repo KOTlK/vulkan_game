@@ -77,7 +77,7 @@ list_append(List<T> *list, T element);
 LIST_TEMPLATE
 static inline
 T*
-list_append_empty(List<T> *list, u32* ret_index);
+list_append_empty(List<T> *list, u32* ret_index = NULL);
 
 LIST_TEMPLATE
 static inline
@@ -230,13 +230,12 @@ list_append_empty(List<T> *list, u32* ret_index) {
     u32 index = list->count;
 
     T element{};
-    
-    memset(&element, 0, sizeof(T));
 
     list->data[index]  = element;
     list->count       += 1;
 
-    *ret_index = index;
+    if (ret_index != NULL)
+        *ret_index = index;
 
     return &list->data[index];
 }
@@ -425,10 +424,11 @@ LIST_TEMPLATE
 static inline
 u32
 list_index_of_ptr(List<T>* list, T* elem) {
-    u64 data_ptr = (u64)list->data;
-    u64 elem_ptr = (u64)elem;
+    // u64 data_ptr = (u64)list->data;
+    // u64 elem_ptr = (u64)elem;
 
-    u64 offset = elem_ptr - data_ptr;
+    // u64 offset = elem_ptr - data_ptr;
+    u64 offset = elem - list->data;
     u64 size   = sizeof(T);
 
     return (u32)(offset / size);

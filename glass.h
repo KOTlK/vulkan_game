@@ -1,6 +1,7 @@
 #pragma once
 
-#include "basic.h"
+// #include "basic.h"
+#include "types.h"
 
 enum ScreenMode {
     FULLSCREEN,
@@ -134,7 +135,7 @@ enum GlassScancode {
 };
 
 // window management
-extern GlassErrorCode glass_create_window(u32 x, u32 y, u32 width, u32 height, const char* name, Window** window);
+extern Window*        glass_create_window(u32 x, u32 y, u32 width, u32 height, const char* name, GlassErrorCode* err);
 extern void           glass_destroy_window(Window* window);
 
 extern void           glass_exit();
@@ -149,17 +150,23 @@ extern u32            glass_get_available_fullscreen_params_count();
 extern void           glass_get_all_available_fullscreen_params(ScreenParams** buffer); // get list of all available fullscreen parameters for currently selected display.
 
 extern double glass_get_time();
+extern void   glass_sleep(double time);
 
 extern void glass_set_window_title(Window* window, char* title);
 
 extern GlassErrorCode glass_render();
 extern GlassErrorCode glass_on_resize(u32 width, u32 height);
+extern GlassErrorCode glass_on_move(u32 x, u32 y);
+extern GlassErrorCode glass_swap_buffers(Window* window);
+extern void*          glass_get_proc_addr(const char* name);
 
 #if defined(WIN32)
 #include "windows.h"
 extern HWND      glass_win32_get_window_handle(Window* window);
 extern HINSTANCE glass_win32_get_instance(Window* window);
 #endif
+
+extern Surface* glass_create_surface();
 
 // rendering
 // extern GlassErrorCode glass_create_surface(Window* window, Surface* surface);
@@ -172,4 +179,4 @@ extern const char**   glass_get_vulkan_instance_extensions(u32* count);
 #endif
 
 // input
-extern bool glass_is_button_pressed(GlassScancode scancode);
+extern bool glass_is_button_pressed(Window* win, GlassScancode scancode);

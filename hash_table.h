@@ -12,28 +12,29 @@
 
 #define Template template <typename Key, typename Value>
 
-template <typename Value>
+Template
 struct HashTableSlot {
+    Key   key;
     Value value;
-    u32   hash;
+    u64   hash;
     bool  tombstone;
 };
 
 Template
 struct HashTable {
-    HashTableSlot<Value>* data;
-    u32                     count;
-    u32                     length;
-    Allocator*              allocator;
+    HashTableSlot<Key, Value>* data;
+    u32                   count;
+    u32                   length;
+    Allocator*            allocator;
 
     HashTable(u32 length = HASH_TABLE_INITIAL_LENGTH, Allocator* allocator = &Allocator_Persistent) :
                                                                    count(0),
                                                                    length(length),
                                                                    allocator(allocator) {
-        data = (HashTableSlot<Value>*)allocator_alloc(allocator, sizeof(HashTableSlot<Value>) * length);
+        data = (HashTableSlot<Key, Value>*)allocator_alloc(allocator, sizeof(HashTableSlot<Key, Value>) * length);
         Assert(data, "Cannot allocate memory for hash_table data.");
 
-        memset(data, 0, sizeof(HashTableSlot<Value>) * length);
+        memset(data, 0, sizeof(HashTableSlot<Key, Value>) * length);
     }
 
     ~HashTable() {
@@ -43,12 +44,12 @@ struct HashTable {
     }
 
     Value& operator[](Key key) {
-        u32 hash      = get_hash(key);
+        u64 hash      = get_hash(key);
         u32 iteration = 0;
         u32 index     = 0;
 
         while (true) {
-            index = hash_table_double_hash(hash, length, iteration++);
+            index = table_double_hash(hash, length, iteration++);
 
             if (data[index].tombstone)    continue;
             if (data[index].hash == hash) break;
@@ -61,12 +62,12 @@ struct HashTable {
     }
 
     const Value& operator[](Key key) const {
-        u32 hash      = get_hash(key);
+        u64 hash      = get_hash(key);
         u32 iteration = 0;
         u32 index     = 0;
 
         while (true) {
-            index = hash_table_double_hash(hash, length, iteration++);
+            index = table_double_hash(hash, length, iteration++);
 
             if (data[index].tombstone)    continue;
             if (data[index].hash == hash) break;
@@ -82,66 +83,72 @@ struct HashTable {
 Template
 static inline
 void
-hash_table_make(HashTable<Key, Value>* hash_table, u32 length = HASH_TABLE_INITIAL_LENGTH, Allocator* allocator = &Allocator_Persistent);
+table_make(HashTable<Key, Value>* hash_table, u32 length = HASH_TABLE_INITIAL_LENGTH, Allocator* allocator = &Allocator_Persistent);
 
 Template
 static inline
 void
-hash_table_realloc(HashTable<Key, Value>* hash_table, u32 length);
+table_realloc(HashTable<Key, Value>* hash_table, u32 length);
 
 Template
 static inline
 void
-hash_table_free(HashTable<Key, Value>* hash_table);
+table_free(HashTable<Key, Value>* hash_table);
 
 Template
 static inline
 void
-hash_table_add(HashTable<Key, Value>* hash_table, Key key, Value value);
+table_add(HashTable<Key, Value>* hash_table, Key key, Value value);
 
 Template
 static inline
 void
-hash_table_set(HashTable<Key, Value>* hash_table, Key key, Value value);
+table_set(HashTable<Key, Value>* hash_table, Key key, Value value);
 
 Template
 static inline
 bool
-hash_table_add_or_set(HashTable<Key, Value>* hash_table, Key key, Value value); // Adds or sets element. If element with the same key already been added, returns true, otherwise return false.
+table_add_or_set(HashTable<Key, Value>* hash_table, Key key, Value value); // Adds or sets element. If element with the same key already been added, returns true, otherwise return false.
 
 Template
 static inline
 void
-hash_table_remove(HashTable<Key, Value>* hash_table, Key key);
+table_remove(HashTable<Key, Value>* hash_table, Key key);
 
 Template
 static inline
 bool
-hash_table_remove_if_contains(HashTable<Key, Value>* hash_table, Key key); // Removes element from hash table if it exist. Returns true if element was removed, false if not.
+table_remove_if_contains(HashTable<Key, Value>* hash_table, Key key); // Removes element from hash table if it exist. Returns true if element was removed, false if not.
 
 Template
 static inline
 bool
-hash_table_contains(HashTable<Key, Value>* hash_table, Key key);
+table_contains(HashTable<Key, Value>* hash_table, Key key);
 
 Template
 static inline
 Value
-hash_table_get(HashTable<Key, Value>* hash_table, Key key);
+table_get(HashTable<Key, Value>* hash_table, Key key);
+
+template <typename Key, typename Value, typename Iterator>
+static inline
+void
+table_iterate(HashTable<Key, Value>* hash_table, Iterator iterator_func);
 
 static inline
-u32
-hash_table_double_hash(u32 hash, u32 length, u32 iteration = 0);
+u64
+table_double_hash(u64 hash, u32 length, u32 iteration = 0);
+
 
 // Implementation
 Template
 static inline
 void
-hash_table_make(HashTable<Key, Value>* hash_table, u32 length, Allocator* allocator) {
-    auto data = (HashTableSlot<Value>*)allocator_alloc(allocator, sizeof(HashTableSlot<Value>) * length);
+table_make(HashTable<Key, Value>* hash_table, u32 length, Allocator* allocator) {
+    auto data = (HashTableSlot<Key, Value>*)allocator_alloc(allocator, sizeof(HashTableSlot<Key, Value>) * length);
     Assert(data, "Cannot allocate memory for hash_table data.");
 
-    memset(data, 0, sizeof(HashTableSlot<Value>) * length);
+    memset(data, 0, sizeof(HashTableSlot<Key, Value>) * length);
 
     hash_table->data      = data;
     hash_table->count     = 0;
@@ -152,13 +159,13 @@ hash_table_make(HashTable<Key, Value>* hash_table, u32 length, Allocator* alloca
 Template
 static inline
 void
-hash_table_realloc(HashTable<Key, Value>* hash_table, u32 length) {
+table_realloc(HashTable<Key, Value>* hash_table, u32 length) {
     Assert(length > hash_table->length, "Cannot resize hash table with less size.");
 
-    auto new_data = (HashTableSlot<Value>*)allocator_alloc(hash_table->allocator, sizeof(HashTableSlot<Value>) * length);
+    auto new_data = (HashTableSlot<Key, Value>*)allocator_alloc(hash_table->allocator, sizeof(HashTableSlot<Key, Value>) * length);
     Assert(new_data, "Cannot allocate enough memory for new hash table data");
 
-    memset(new_data, 0, sizeof(HashTableSlot<Value>) * length);
+    memset(new_data, 0, sizeof(HashTableSlot<Key, Value>) * length);
 
     for (u32 i = 0; i < hash_table->length; i++) {
         if (hash_table->data[i].hash != 0) {
@@ -166,7 +173,7 @@ hash_table_realloc(HashTable<Key, Value>* hash_table, u32 length) {
             u32 index     = 0;
 
             while (true) {
-                index = hash_table_double_hash(hash_table->data[i].hash, length, iteration++);
+                index = table_double_hash(hash_table->data[i].hash, length, iteration++);
 
                 if (new_data[index].hash == 0) break;
             }
@@ -188,7 +195,7 @@ hash_table_realloc(HashTable<Key, Value>* hash_table, u32 length) {
 Template
 static inline
 void
-hash_table_free(HashTable<Key, Value>* hash_table) {
+table_free(HashTable<Key, Value>* hash_table) {
     // nothing to free if using Allocator_Temp
     if (hash_table->allocator == &Allocator_Temp) return;
 
@@ -199,14 +206,14 @@ hash_table_free(HashTable<Key, Value>* hash_table) {
 Template
 static inline
 void
-hash_table_add(HashTable<Key, Value>* hash_table, Key key, Value value) {
-    u32 hash      = get_hash(key);
+table_add(HashTable<Key, Value>* hash_table, Key key, Value value) {
+    u64 hash      = get_hash(key);
     Assert(hash != 0, "Hash cannot be 0, fix your hash function.");
     u32 iteration = 0;
     u32 index     = 0;
 
     while (true) {
-        index = hash_table_double_hash(hash, hash_table->length, iteration++);
+        index = table_double_hash(hash, hash_table->length, iteration++);
 
         if (hash_table->data[index].tombstone)    continue;
         if (hash_table->data[index].hash == hash) break;
@@ -215,7 +222,7 @@ hash_table_add(HashTable<Key, Value>* hash_table, Key key, Value value) {
 
     Assert(hash_table->data[index].hash != hash, "An item with the same key has already been added.");
 
-    auto slot = HashTableSlot<Value> {0};
+    auto slot = HashTableSlot<Key, Value> {};
     slot.hash  = hash;
     slot.value = value;
 
@@ -225,20 +232,20 @@ hash_table_add(HashTable<Key, Value>* hash_table, Key key, Value value) {
     u32 load_factor = hash_table->count * 100 / hash_table->length;
 
     if (load_factor >= HASH_TABLE_MAX_LOAD_FACTOR) {
-        hash_table_realloc(hash_table, hash_table->length + HASH_TABLE_REALLOC_STEP);
+        table_realloc(hash_table, hash_table->length + HASH_TABLE_REALLOC_STEP);
     }
 }
 
 Template
 static inline
 void
-hash_table_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
-    u32 hash      = get_hash(key);
+table_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
+    u64 hash      = get_hash(key);
     u32 iteration = 0;
     u32 index     = 0;
 
     while (true) {
-        index = hash_table_double_hash(hash, hash_table->length, iteration++);
+        index = table_double_hash(hash, hash_table->length, iteration++);
 
         if (hash_table->data[index].tombstone)    continue;
         if (hash_table->data[index].hash == hash) break;
@@ -247,7 +254,7 @@ hash_table_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
 
     Assert(hash_table->data[index].hash == hash, "The key is not presented in the hash table.");
 
-    auto slot  = HashTableSlot<Value> {0};
+    auto slot  = HashTableSlot<Key, Value> {0};
     slot.hash  = hash;
     slot.value = value;
 
@@ -257,13 +264,13 @@ hash_table_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
 Template
 static inline
 bool
-hash_table_add_or_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
-    u32 hash      = get_hash(key);
+table_add_or_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
+    u64 hash      = get_hash(key);
     u32 iteration = 0;
     u32 index     = 0;
 
     while (true) {
-        index = hash_table_double_hash(hash, hash_table->length, iteration++);
+        index = table_double_hash(hash, hash_table->length, iteration++);
 
         if (hash_table->data[index].tombstone)    continue;
         if (hash_table->data[index].hash == hash) break;
@@ -276,7 +283,7 @@ hash_table_add_or_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
         has = true;
     }
 
-    auto slot = HashTableSlot<Value> {0};
+    auto slot = HashTableSlot<Key, Value> {0};
     slot.hash  = hash;
     slot.value = value;
     hash_table->data[index] = slot;
@@ -286,7 +293,7 @@ hash_table_add_or_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
         u32 load_factor = hash_table->count * 100 / hash_table->length;
 
         if (load_factor >= HASH_TABLE_MAX_LOAD_FACTOR) {
-            hash_table_realloc(hash_table, hash_table->length + HASH_TABLE_REALLOC_STEP);
+            table_realloc(hash_table, hash_table->length + HASH_TABLE_REALLOC_STEP);
         }
     }
 
@@ -296,20 +303,18 @@ hash_table_add_or_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
 Template
 static inline
 void
-hash_table_remove(HashTable<Key, Value>* hash_table, Key key) {
-    u32 hash      = get_hash(key);
+table_remove(HashTable<Key, Value>* hash_table, Key key) {
+    u64 hash      = get_hash(key);
     u32 iteration = 0;
     u32 index     = 0;
 
     while (true) {
-        index = hash_table_double_hash(hash, hash_table->length, iteration++);
+        index = table_double_hash(hash, hash_table->length, iteration++);
 
         if (hash_table->data[index].tombstone)    continue;
         if (hash_table->data[index].hash == hash) break;
         if (hash_table->data[index].hash == 0)    break;
     }
-
-    Assert(hash_table->data[index].hash == hash, "The key was not presented in the hash table.");
 
     hash_table->data[index].tombstone = true;
     hash_table->data[index].hash      = 0;
@@ -320,13 +325,13 @@ hash_table_remove(HashTable<Key, Value>* hash_table, Key key) {
 Template
 static inline
 bool
-hash_table_remove_if_contains(HashTable<Key, Value>* hash_table, Key key) {
-    u32 hash      = get_hash(key);
+table_remove_if_contains(HashTable<Key, Value>* hash_table, Key key) {
+    u64 hash      = get_hash(key);
     u32 iteration = 0;
     u32 index     = 0;
 
     while (true) {
-        index = hash_table_double_hash(hash, hash_table->length, iteration++);
+        index = table_double_hash(hash, hash_table->length, iteration++);
 
         if (hash_table->data[index].tombstone)    continue;
         if (hash_table->data[index].hash == hash) break;
@@ -348,46 +353,52 @@ hash_table_remove_if_contains(HashTable<Key, Value>* hash_table, Key key) {
 Template
 static inline
 bool
-hash_table_contains(HashTable<Key, Value>* hash_table, Key key) {
-    u32 hash      = get_hash(key);
+table_contains(HashTable<Key, Value>* hash_table, Key key) {
+    u64 hash      = get_hash(key);
     u32 iteration = 0;
     u32 index     = 0;
 
     while (true) {
-        index = hash_table_double_hash(hash, hash_table->length, iteration++);
+        index = table_double_hash(hash, hash_table->length, iteration++);
 
         if (hash_table->data[index].tombstone)    continue;
-        if (hash_table->data[index].hash == hash) break;
-        if (hash_table->data[index].hash == 0)    break;
+        if (hash_table->data[index].hash == hash) return true;
+        if (hash_table->data[index].hash == 0)    return false;
     }
-
-    return hash_table->data[index].hash == hash;
 }
 
 Template
 static inline
 Value
-hash_table_get(HashTable<Key, Value>* hash_table, Key key) {
-    u32 hash      = get_hash(key);
+table_get(HashTable<Key, Value>* hash_table, Key key) {
+    u64 hash      = get_hash(key);
     u32 iteration = 0;
     u32 index     = 0;
 
     while (true) {
-        index = hash_table_double_hash(hash, hash_table->length, iteration++);
+        index = table_double_hash(hash, hash_table->length, iteration++);
 
         if (hash_table->data[index].tombstone)    continue;
-        if (hash_table->data[index].hash == hash) break;
-        if (hash_table->data[index].hash == 0)    break;
+
+        if (hash_table->data[index].hash == hash) return hash_table->data[index].value;
+        if (hash_table->data[index].hash == 0)    return NULL;
     }
+}
 
-    Assert(hash_table->data[index].hash == hash, "The key was not presented in the hash table.");
-
-    return hash_table->data[index].value;
+template <typename Key, typename Value, typename Iterator>
+static inline
+void
+table_iterate(HashTable<Key, Value>* hash_table, Iterator iterator_func) {
+    for (u32 i = 0; i < hash_table->length; i++) {
+        if (hash_table->data[i].hash != 0) {
+            iterator_func(hash_table->data[i].key, hash_table->data[i].value);
+        }
+    }
 }
 
 static inline
-u32
-hash_table_double_hash(u32 hash, u32 length, u32 iteration) {
-    u32 secondary = 1 + (hash % (length - 1));
+u64
+table_double_hash(u64 hash, u32 length, u32 iteration) {
+    u64 secondary = 1 + (hash % (length - 1));
     return (hash + iteration * secondary) % length;
 }
