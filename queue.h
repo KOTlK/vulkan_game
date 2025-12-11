@@ -12,32 +12,20 @@
 QUEUE_TEMPLATE
 struct Queue {
     T*         data;
+    Allocator* allocator;
     u32        count;
     u32        length;
     u32        head;
     u32        tail;
-    Allocator* allocator;
 
-    Queue(u32 length = QUEUE_INITIAL_LENGTH, Allocator* allocator = &Allocator_Temp) : count(0),
-                                                                                       length(length),
-                                                                                       head(0),
-                                                                                       tail(0),
-                                                                                       allocator(allocator) {
-        data = (T*)allocator_alloc(allocator, sizeof(T) * length);
-        Assert(data, "Cannot allocate memory for queue data.");
-    }
-
-    ~Queue() {
-        if (allocator == &Allocator_Temp) return;
-
-        allocator_free(allocator, data);
-    }
+    Queue() : data(NULL), allocator(NULL), count(0), length(0), head(0), tail(0){};
+    ~Queue() = default;
 };
 
 QUEUE_TEMPLATE
 static inline
 void
-queue_make(Queue<T>* queue, u32 length = QUEUE_INITIAL_LENGTH, Allocator* allocator = &Allocator_Persistent);
+queue_make(Queue<T>* queue, u32 length = QUEUE_INITIAL_LENGTH, Allocator* allocator = Allocator_Persistent);
 
 QUEUE_TEMPLATE
 static inline
@@ -75,7 +63,7 @@ QUEUE_TEMPLATE
 static inline
 void
 queue_make(Queue<T>* queue, u32 length, Allocator* allocator) {
-    auto data = (T*)allocator_alloc(allocator, sizeof(T) * length);
+    auto data = AllocatorAlloc(T, allocator, sizeof(T) * length);
     Assert(data, "Cannot allocate memory for queue data");
 
     queue->data      = data;
@@ -90,9 +78,10 @@ QUEUE_TEMPLATE
 static inline
 void
 queue_realloc(Queue<T>* queue, u32 length) {
+    Assert(queue->data, "Cannot resize uninitialized queue, initialize it with queue_make.");
     Assert(length > queue->length, "Cannot resize queue with less size.");
-    if (queue->allocator == &Allocator_Temp) {
-        T* new_data = (T*)allocator_alloc(queue->allocator, sizeof(T) * length);
+    if (queue->allocator == Allocator_Temp) {
+        T* new_data = AllocatorAlloc(T, queue->allocator, sizeof(T) * length);
         Assert(new_data, "Cannot allocate enough memory for new queue");
 
         u32 head = queue->head;
@@ -109,7 +98,7 @@ queue_realloc(Queue<T>* queue, u32 length) {
         queue->data = new_data;
     } else {
         T* origin = queue->data;
-        queue->data = (T*)allocator_realloc(queue->allocator, queue->data, sizeof(T) * length);
+        queue->data = (T*)queue->allocator->realloc(queue->data, sizeof(T) * length);
         Assert(queue->data, "Cannot allocate enough memory for new queue");
 
         if (queue->head > queue->tail || queue->head == queue->tail) {
@@ -132,16 +121,18 @@ QUEUE_TEMPLATE
 static inline
 void
 queue_free(Queue<T>* queue) {
-    if (queue->allocator == &Allocator_Temp) return;
+    Assert(queue->data, "Cannot free uninitialized queue, initialize it with queue_make.");
+    if (queue->allocator == Allocator_Temp) return;
 
-    allocator_free(queue->allocator, queue->data);
-    allocator_free(queue->allocator, queue);
+    AllocatorFree(queue->allocator, queue->data);
+    AllocatorFree(queue->allocator, queue);
 }
 
 QUEUE_TEMPLATE
 static inline
 void
 queue_enqueue(Queue<T>* queue, T elem) {
+    Assert(queue->data, "Cannot enqueue to uninitialized queue, initialize it with queue_make.");
     if (queue->count >= queue->length)
         queue_realloc(queue, queue->count + 1 + QUEUE_REALLOC_STEP);
 
@@ -155,6 +146,7 @@ QUEUE_TEMPLATE
 static inline
 T
 queue_dequeue(Queue<T>* queue) {
+    Assert(queue->data, "Cannot dequeue from uninitialized queue, initialize it with queue_make.");
     Assert(queue->count > 0, "Cannot dequeu if queue is empty.");
     T elem = queue->data[queue->head];
     queue->count--;
@@ -172,6 +164,7 @@ QUEUE_TEMPLATE
 static inline
 void
 queue_clear(Queue<T>* queue) {
+    Assert(queue->data, "Cannot clear uninitialized queue, initialize it with queue_make.");
     queue->head  = 0;
     queue->tail  = 0;
     queue->count = 0;
@@ -181,6 +174,7 @@ QUEUE_TEMPLATE
 static inline
 bool
 queue_contains(Queue<T>* queue, T elem) {
+    Assert(queue->data, "Cannot search in uninitialized queue, initialize it with queue_make.");
     u32 counter = queue->head;
 
     while(counter != queue->tail) {

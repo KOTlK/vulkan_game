@@ -13,9 +13,9 @@ struct RenderContext {
 #endif
 };
 
-static RenderContext Context{};
+static RenderContext Render_Context{};
 
-RenderError render_init(Window* window) {
+RenderError render_init(Context* ctx) {
     int glad_version = 0;
 #ifdef GLASS_SDL
     SDL_Init(SDL_INIT_VIDEO);
@@ -25,7 +25,7 @@ RenderError render_init(Window* window) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-    Context.sdl_context  = SDL_GL_CreateContext(window->window);
+    Render_Context.sdl_context  = SDL_GL_CreateContext(ctx->wnd->window);
     glad_version = gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
 #endif
 
@@ -41,7 +41,7 @@ RenderError render_init(Window* window) {
 
 void render_destroy() {
 #ifdef GLASS_SDL
-    SDL_GL_DestroyContext(Context.sdl_context);
+    SDL_GL_DestroyContext(Render_Context.sdl_context);
 #endif
 }
 

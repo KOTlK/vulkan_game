@@ -28,11 +28,17 @@ Window* glass_create_window(u32 x, u32 y, u32 width, u32 height, const char* nam
 
     SDL_Window* sdl_window = SDL_CreateWindow(
         name,
-        800, 600,
+        width, height,
         SDL_WINDOW_OPENGL | 
         SDL_WINDOW_RESIZABLE |
         SDL_WINDOW_INPUT_FOCUS
     );
+
+    if (sdl_window == NULL) {
+        Errf("%s", SDL_GetError());
+        *err = GLASS_INTERNAL_ERROR;
+        return NULL;
+    }
 
     u32 id = SDL_GetWindowID(sdl_window);
 
@@ -55,6 +61,8 @@ Window* glass_create_window(u32 x, u32 y, u32 width, u32 height, const char* nam
 
     SDL_SetWindowPosition(sdl_window, x, y);
 
+    *err = GLASS_OK;
+
     return window;
 }
 
@@ -68,6 +76,10 @@ void glass_destroy_window(Window* window) {
     if (Windows.count == 0) {
         Should_Quit = true;
     }
+}
+
+extern void glass_set_window_title(Window* window, const char* title) {
+    SDL_SetWindowTitle(window->window, title);
 }
 
 void glass_exit() {
@@ -113,10 +125,16 @@ bool glass_is_button_pressed(Window* win, GlassScancode sc) {
     return win->keys[sc].hold;
 }
 
-void glass_sleep(double time) {
-    time *= 1000.0l;
+u64 glass_query_performance_counter() {
+    return SDL_GetPerformanceCounter();
+}
 
-    SDL_Delay((u32)time);
+u64 glass_query_performance_frequency() {
+    return SDL_GetPerformanceFrequency();
+}
+
+void glass_sleep(u64 time) {
+    SDL_Delay(time);
 }
 
 GlassErrorCode glass_swap_buffers(Window* window) {
@@ -166,7 +184,12 @@ static inline void dispatch_event(SDL_Event event) {
             }
         } break;
         case SDL_EVENT_WINDOW_RESIZED: {
-            Logf("Resized. %i, %i.", event.window.data1, event.window.data2);
+            glass_on_resize(event.window.data1, event.window.data2);
+            // Logf("Resized. %i, %i.", event.window.data1, event.window.data2);
+        } break;
+        case SDL_EVENT_WINDOW_MOVED: {
+            glass_on_move(event.window.data1, event.window.data2);
+            // Logf("Resized. %i, %i.", event.window.data1, event.window.data2);
         } break;
         default:
         break;

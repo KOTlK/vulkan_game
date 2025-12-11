@@ -1,34 +1,14 @@
 #pragma once
 
-#include "basic.h"
+#include "types.h"
 
-struct Allocator;
-
-typedef void* (*AllocateFn)(Allocator* allocator, u64 size);
-typedef void* (*ReallocateFn)(Allocator* allocator, void* ptr, u64 new_size);
-typedef void  (*FreeFn)(Allocator* allocator, void* ptr);
+#define AllocatorAlloc(type, allocator, size) (type*)(allocator)->alloc(size)
+#define AllocatorCalloc(type, allocator, count) (type*)(allocator)->alloc(sizeof(type) * (count))
+#define AllocatorFree(allocator, data) (allocator)->free(data)
 
 struct Allocator {
-    AllocateFn   alloc;
-    ReallocateFn realloc;
-    FreeFn       free;
-    void        *context;
+    virtual void* alloc(u64 size)              = 0;
+    virtual void* realloc(void* ptr, u64 size) = 0;
+    virtual void  free(void* ptr) {};
+    virtual void  clear() {};
 };
-
-static inline
-void*
-allocator_alloc(Allocator *allocator, u64 size) {
-    return allocator->alloc(allocator, size);
-}
-
-static inline
-void*
-allocator_realloc(Allocator *allocator, void* ptr, u64 size) {
-    return allocator->realloc(allocator, ptr, size);
-}
-
-static inline
-void
-allocator_free(Allocator *allocator, void* ptr) {
-    return allocator->free(allocator, ptr);
-}

@@ -4,9 +4,7 @@
 #ifdef DEBUG
 #include <cstdio>
 #include <cstdlib>
-#endif
 
-#ifdef DEBUG
 #define Assert(expr, msg) \
     if (!(expr)) {\
         fprintf(stderr, "\nAssert failed. %s:%i. %s\n", __FILE__, __LINE__, msg);\

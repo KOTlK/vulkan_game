@@ -1,7 +1,3 @@
-// #define DVK_USE_PLATFORM_WIN32_KHR
-// #define Vulkan
-
-// #include <vulkan/vulkan.h>
 #include "glass.h"
 #include <cstdio>
 #include "basic.h"
@@ -16,9 +12,10 @@
 #include "assert.h"
 #include "hash_table.h"
 #include "render.h"
-#include <SDL3/SDL.h>
-#include <glad/glad.h>
 #include "debug.h"
+#include "mathematics.h"
+#include "game_context.h"
+#include "array.h"
 
 #define WIDTH  1280
 #define HEIGHT 720
@@ -55,7 +52,8 @@ typedef struct Matrices {
     Matrix4 mvp;
 } Matrices;
 
-Window*          WINDOW{};
+Context Game_Context{};
+// Window*          Wnd{};
 // Transform2d*   TRANSFORMS;
 // Matrices*      MATRICES;
 // u32            TRANSFORMS_COUNT  = 0;
@@ -66,9 +64,9 @@ Matrix4 PROJECTION;
 
 Camera2D CAMERA = {};
 
-double TIME_DOUBLE = 0.0l;
-float  TIME        = 0.0f;
-float  DT          = 0.0f;
+// double TIME_DOUBLE = 0.0l;
+// float  TIME        = 0.0f;
+// float  DT          = 0.0f;
 
 void print_instance_extensions();
 
@@ -108,160 +106,152 @@ int main(int argc, char** argv) {
     //     printf("%d\n", shape.indices[i]);
     // }
 
-    const char* name         = "Hello";
+    const char* name = "Hello";
 
-    GlassErrorCode err;
+    GlassErrorCode err = GLASS_OK;
 
-    WINDOW = glass_create_window(100, 100, WIDTH, HEIGHT, name, &err);
+    Game_Context.wnd = glass_create_window(400, 100, WIDTH, HEIGHT, name, &err);
 
     if (err != GLASS_OK) {
         printf("Cannot create window. %d\n", err);
         return 1;
     }
 
-    RenderError render_err = render_init(WINDOW);
+    RenderError render_err = render_init(&Game_Context);
 
     if (render_err != RENDER_OK) {
         printf("Render init error. %d.\n", render_err);
         return 1;
     }
 
+    u64 last_time = glass_query_performance_counter();
+    u64 current_time = 0;
 
-    // SDL_Window *window = SDL_CreateWindow(
-    //     "Hello sdl",
-    //     800, 600,
-    //     SDL_WINDOW_OPENGL | 
-    //     SDL_WINDOW_RESIZABLE |
-    //     SDL_WINDOW_INPUT_FOCUS
-    // );
-    
-    // SDL_Init(SDL_INIT_VIDEO);
+    u64 max_fps           = 1000;
+    u64 target_fps        = 75;
+    u64 target_frame_time = 1000 / target_fps;
 
-    // SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    // SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-    // SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
-    // SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
-    // SDL_GLContext context = SDL_GL_CreateContext(window);
-
-    // int version = gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
-
-    // if (version == 0) {
-    //     Errf("Cannot load glad.");
-    //     return 0;
-    // }
-
-    // Logf("Glad version: %i.", version);
-
+#if MEMORY_DEBUG
+    s64 persistent_memory_this_frame = 0;
+#endif
     while (true) {
+        HashTable<u64, u64> table;
+
+        table_make(&table, Allocator_Temp);
+
+        table_add(&table, 32llu, 32llu);
+
+#if MEMORY_DEBUG
+        Arena* arena = static_cast<Arena*>(get_temp_allocator());
+        Logf("Temp memory allocated this frame: %llu B, %lf KB, %lf MB \n"
+             "Total temp memory capacity: %llu B, %lf KB, %lf MB\n"
+             "Buckets allocated: %llu", arena->allocated,
+                                        arena->allocated / 1024.0,
+                                        arena->allocated / 1024.0 / 1024.0,
+                                        arena->total_capacity,
+                                        arena->total_capacity / 1024.0,
+                                        arena->total_capacity / 1024.0 / 1024.0,
+                                        arena->buckets_count);
+#endif
+
+#if MEMORY_DEBUG
+        AllocatorPersistent* persistent = static_cast<AllocatorPersistent*>(Allocator_Persistent);
+        s64 mem_diff = (s64)persistent->allocated - persistent_memory_this_frame;
+        persistent_memory_this_frame = (s64)persistent->allocated;
+        Logf("Persistent memory allocated totally: %llu B, %lf KB, %lf MB \n"
+             "Persistent memory allocated this frame: %lli B, %lf KB, %lf MB \n",
+                                        persistent->allocated,
+                                        persistent->allocated / 1024.0,
+                                        persistent->allocated / 1024.0 / 1024.0,
+                                        mem_diff,
+                                        mem_diff / 1024.0,
+                                        mem_diff / 1024.0 / 1024.0);
+#endif
         free_temp_allocator();
-        if (glass_is_button_pressed(WINDOW, GLASS_SCANCODE_ESCAPE)) {
+        if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_ESCAPE)) {
             glass_exit();
             break;
+        }
+
+        if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_UP)) {
+            target_fps += 1;
+            target_fps = clamp(target_fps, 1ull, max_fps);
+            target_frame_time = 1000 / target_fps;
+        } else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_DOWN)) {
+            target_fps -= 1;
+            target_fps = clamp(target_fps, 1ull, max_fps);
+            target_frame_time = 1000 / target_fps;
         }
 
         if (glass_exit_required())
             break;
 
         glass_main_loop();
-        glass_sleep(0.016l);
+
+        current_time = glass_query_performance_counter();
+
+        u64 dt_int = (current_time - last_time) * 1000 / glass_query_performance_frequency();
+        double dt = (double)(current_time - last_time) / glass_query_performance_frequency();
+
+        last_time = current_time;
+
+        u64 sleep_time = target_frame_time - dt_int;
+
+        sleep_time = clamp(sleep_time, 0lu, target_frame_time);
+
+        if (sleep_time > 0) {
+            glass_sleep(sleep_time);
+            current_time = glass_query_performance_counter();
+
+            dt = (double)(current_time - last_time) / glass_query_performance_frequency();
+            last_time = current_time;
+        }
+
+        Game_Context.time.dt_double    = dt;
+        Game_Context.time.dt           = (float)dt;
+        Game_Context.time.time_double += dt;
+        Game_Context.time.time         = (float)Game_Context.time.time_double;
+
+        u64 fps = (u64)(1.0l / dt);
+
+        // Logf("Delta Time: %f", dt);
+        // Logf("Target frame time: %llu", target_frame_time);
+        // Logf("Sleep time: %llu", sleep_time);
+        // Logf("Dt int: %llu", dt_int);
+
+        char buf[1024];
+
+        sprintf(buf, "fps: %llu, dt:%f, time:%f\n", fps, Game_Context.time.dt, Game_Context.time.time);
+        glass_set_window_title(Game_Context.wnd, buf);
+
+        // glass_sleep(16);
     }
 
-    // int exit = 0;
-    // while(!exit) {
-    //     SDL_Event event;
-    //     while (SDL_PollEvent(&event)) {
-    //         switch(event.type) {
-    //             case SDL_EVENT_QUIT:
-    //                 exit = 1;
-    //                 break;
-    //             case SDL_EVENT_KEY_DOWN:
-    //                 if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
-    //                     exit = 1;
-    //                 }
-    //                 break;
-    //             case SDL_EVENT_WINDOW_RESIZED: {
-    //                 Logf("Resized. %i, %i.", event.window.data1, event.window.data2);
-    //             } break;
-    //             default:
-    //                 break;
-    //         }
-    //     }
-
-    //     glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-    //     glClear(GL_COLOR_BUFFER_BIT);
-
-    //     SDL_GL_SwapWindow(window);
-    //     SDL_Delay(1);
-    // }
-
-    // SDL_GL_DestroyContext(context);
-    // SDL_DestroyWindow(window);
-    // SDL_Quit();
-
     render_destroy();
-    glass_destroy_window(WINDOW);
+    glass_destroy_window(Game_Context.wnd);
 
-    // double last_time = glass_get_time();
-
-    // const double target_fps = 1.0l / 60.0l;
-
-    // while (true) {
-    //     free_temp_allocator();
-    //     if (glass_is_button_pressed(GLASS_SCANCODE_ESCAPE)) {
-    //         glass_exit();
-    //         break;
-    //     }
-
-    //     if (glass_exit_required())
-    //         break;
-
-    //     glass_main_loop();
-        
-    //     double current_time = glass_get_time();
-    //     double actual_dt    = current_time - last_time;
-    //            TIME_DOUBLE  += actual_dt;
-    //     last_time = current_time;
-    //     char buf[128];
-        
-    //     double sleep_time = target_fps - actual_dt;
-
-    //     if (actual_dt > 0.0l) {
-    //         glass_sleep(sleep_time);
-    //         last_time = glass_get_time();
-    //         actual_dt = target_fps;
-    //     }
-
-    //     int   fps  = (int)(1.0l / actual_dt);
-    //     float dt   = (float)actual_dt;
-    //           DT   = dt;
-    //           TIME = float(TIME_DOUBLE);
-    //     sprintf(buf, "fps: %i, dt:%f, time:%f", fps, dt, TIME);
-    //     glass_set_window_title(WINDOW, buf);
-    // }
-
-    // printf("Exit begin.\n");
-
-    // render_destroy();
-    // glass_destroy_window(WINDOW);
     return 0;
 }
 
 GlassErrorCode glass_render() {
     RenderError err = render_test();
 
-    if (err != RENDER_OK) {
-        printf("Cannot render. Render error: %d.\n", err);
-        return GLASS_INTERNAL_ERROR;
-    }
+    Assertf(!err, "Cannot render. Render error: %d", err);
+
+    // if (err != RENDER_OK) {
+    //     printf("Cannot render. Render error: %d.\n", err);
+    //     return GLASS_INTERNAL_ERROR;
+    // }
 
     return GLASS_OK;
 }
 
-// GlassErrorCode glass_on_resize(u32 width, u32 height) {
-//     return GLASS_OK;
-// }
+GlassErrorCode glass_on_resize(u32 width, u32 height) {
+    Logf("Resized. %i, %i.", width, height);
+    return GLASS_OK;
+}
 
-// GlassErrorCode glass_on_move(u32 x, u32 y) {
-//     return GLASS_OK;
-// }
+GlassErrorCode glass_on_move(u32 x, u32 y) {
+    Logf("Moved. %i, %i.", x, y);
+    return GLASS_OK;
+}

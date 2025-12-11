@@ -1,6 +1,5 @@
 #pragma once
 
-// #include "basic.h"
 #include "types.h"
 
 enum ScreenMode {
@@ -149,10 +148,12 @@ extern void           glass_set_window_size(Window* window, u32 width, u32 heigh
 extern u32            glass_get_available_fullscreen_params_count();
 extern void           glass_get_all_available_fullscreen_params(ScreenParams** buffer); // get list of all available fullscreen parameters for currently selected display.
 
-extern double glass_get_time();
-extern void   glass_sleep(double time);
+extern u64 glass_query_performance_counter();
+extern u64 glass_query_performance_frequency();
 
-extern void glass_set_window_title(Window* window, char* title);
+extern void glass_sleep(u64 time);
+
+extern void glass_set_window_title(Window* window, const char* title);
 
 extern GlassErrorCode glass_render();
 extern GlassErrorCode glass_on_resize(u32 width, u32 height);

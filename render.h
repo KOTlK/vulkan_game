@@ -3,6 +3,7 @@
 #include "basic.h"
 #include "geometry.h"
 #include "Vector2.h"
+#include "game_context.h"
 
 struct Window;
 struct Shader;
@@ -26,7 +27,7 @@ typedef enum RenderError {
     RENDER_NO_GPU_FOUND   = 2,
 } RenderError;
 
-RenderError render_init(Window* window);
+RenderError render_init(Context* context);
 void        render_destroy();
 RenderError render_test();
 
