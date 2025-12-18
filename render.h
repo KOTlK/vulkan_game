@@ -4,11 +4,13 @@
 #include "geometry.h"
 #include "Vector2.h"
 #include "game_context.h"
+#include "text.h"
+#include "Matrix4.h"
 
 struct Window;
 struct Shader;
 struct Material;
-struct CommandBuffer;
+// struct CommandBuffer;
 
 typedef struct Camera {
     Vector2 position;
@@ -31,15 +33,13 @@ RenderError render_init(Context* context);
 void        render_destroy();
 RenderError render_test();
 
-RenderError create_command_buffer(CommandBuffer* cmd);
-void        cmd_begin_render(CommandBuffer* cmd);
-void        cmd_begin_command_buffer(CommandBuffer* cmd);
-void        free_command_buffer(CommandBuffer* cmd);
+RenderError render_shape_2d(Material* mat, Shape2D* shape, Matrix4 trs);
 
-Shader* shader_make(char* vert_text, char* frag_text, u32 vert_len, u32 frag_len, RenderError* err);
+Shader* shader_make(String* vert, String* frag, RenderError* err);
 void    shader_destroy(Shader* shader);
 
-RenderError render_vertices_indexed16(CommandBuffer* cmd, Material* shader, Vertex2D* vertices, u16* indices, u32 vertex_count, u32 index_count);
+Material* material_make(Shader* shader);
+void      material_destroy(Material* mat);
 
 // camera
 void camera_make_ortho(float size, float aspect_ratio, Camera* camera);

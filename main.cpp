@@ -2,7 +2,6 @@
 #include <cstdio>
 #include "basic.h"
 #include <cstring>
-#define GAME_MATH_IMPLEMENTATION
 #include "Vector2.h"
 #include "Vector3.h"
 #include "Matrix4.h"
@@ -13,9 +12,11 @@
 #include "hash_table.h"
 #include "render.h"
 #include "debug.h"
-#include "mathematics.h"
 #include "game_context.h"
 #include "array.h"
+#include "mathematics.h"
+#include "vector_utils.h"
+#include "rlist.h"
 
 #define WIDTH  1280
 #define HEIGHT 720
@@ -28,11 +29,6 @@ typedef struct Camera2D {
     float   top;
     float   bottom;
 } Camera2D;
-
-typedef struct Vertex {
-    float position[2];
-    u8    color[4];
-} Vertex;
 
 typedef struct PerFrameData {
     Matrix4 view;
@@ -82,7 +78,7 @@ static inline float frand(float min, float max) {
 int main(int argc, char** argv) {
     // srand(time(NULL));
 
-    // Vertex2D shape_vertices[] = {
+    // Vertex shape_vertices[] = {
     //     {{{   0.5f,  -0.5f }}, { 255, 0,   0,   255 }},
     //     {{{   0.5f,   0.5f }}, { 0,   255, 0,   255 }},
     //     {{{  -0.5f,   0.5f }}, { 0,   0,   255, 255 }},
@@ -98,7 +94,7 @@ int main(int argc, char** argv) {
     // shape2d_make(shape_vertices, shape_indices, 4, 6, &shape);
 
     // for (u32 i = 0; i < shape.vertex_count; i++) {
-    //     Vertex2D v = shape.vertices[i];
+    //     Vertex v = shape.vertices[i];
     //     printf("%f, %f, %d, %d, %d, %d\n", v.position.x, v.position.y, v.color.r, v.color.g, v.color.b, v.color.a);
     // }
 
@@ -113,16 +109,20 @@ int main(int argc, char** argv) {
     Game_Context.wnd = glass_create_window(400, 100, WIDTH, HEIGHT, name, &err);
 
     if (err != GLASS_OK) {
-        printf("Cannot create window. %d\n", err);
+        Errf("Cannot create window. %d", err);
         return 1;
     }
+
+    Log("Window created.");
 
     RenderError render_err = render_init(&Game_Context);
 
     if (render_err != RENDER_OK) {
-        printf("Render init error. %d.\n", render_err);
+        Errf("Render init error. %d.", render_err);
         return 1;
     }
+
+    Log("Render initialized.");
 
     u64 last_time = glass_query_performance_counter();
     u64 current_time = 0;
@@ -135,11 +135,6 @@ int main(int argc, char** argv) {
     s64 persistent_memory_this_frame = 0;
 #endif
     while (true) {
-        HashTable<u64, u64> table;
-
-        table_make(&table, Allocator_Temp);
-
-        table_add(&table, 32llu, 32llu);
 
 #if MEMORY_DEBUG
         Arena* arena = static_cast<Arena*>(get_temp_allocator());
@@ -152,9 +147,7 @@ int main(int argc, char** argv) {
                                         arena->total_capacity / 1024.0,
                                         arena->total_capacity / 1024.0 / 1024.0,
                                         arena->buckets_count);
-#endif
 
-#if MEMORY_DEBUG
         AllocatorPersistent* persistent = static_cast<AllocatorPersistent*>(Allocator_Persistent);
         s64 mem_diff = (s64)persistent->allocated - persistent_memory_this_frame;
         persistent_memory_this_frame = (s64)persistent->allocated;
@@ -197,7 +190,7 @@ int main(int argc, char** argv) {
 
         u64 sleep_time = target_frame_time - dt_int;
 
-        sleep_time = clamp(sleep_time, 0lu, target_frame_time);
+        sleep_time = clamp(sleep_time, 0llu, target_frame_time);
 
         if (sleep_time > 0) {
             glass_sleep(sleep_time);
@@ -233,15 +226,14 @@ int main(int argc, char** argv) {
     return 0;
 }
 
-GlassErrorCode glass_render() {
+GlassErrorCode glass_render(Window* window) {
     RenderError err = render_test();
 
-    Assertf(!err, "Cannot render. Render error: %d", err);
 
-    // if (err != RENDER_OK) {
-    //     printf("Cannot render. Render error: %d.\n", err);
-    //     return GLASS_INTERNAL_ERROR;
-    // }
+    if (err != RENDER_OK) {
+        Errf("Cannot render. Render error: %d.", err);
+        return GLASS_INTERNAL_ERROR;
+    }
 
     return GLASS_OK;
 }

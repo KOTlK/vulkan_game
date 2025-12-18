@@ -155,7 +155,7 @@ extern void glass_sleep(u64 time);
 
 extern void glass_set_window_title(Window* window, const char* title);
 
-extern GlassErrorCode glass_render();
+extern GlassErrorCode glass_render(Window* window);
 extern GlassErrorCode glass_on_resize(u32 width, u32 height);
 extern GlassErrorCode glass_on_move(u32 x, u32 y);
 extern GlassErrorCode glass_swap_buffers(Window* window);

@@ -99,20 +99,20 @@ void glass_main_loop() {
         dispatch_event(event);
     }
 
-    GlassErrorCode err = glass_render();
-
-    if (err != GLASS_OK) {
-        glass_exit();
-        return;
-    }
-
     for (Window& window : Windows) {
         if (window.should_close) {
             glass_destroy_window(&window);
             return;
         }
 
-        GlassErrorCode err = glass_swap_buffers(&window);
+        GlassErrorCode err = glass_render(&window);
+
+        if (err != GLASS_OK) {
+            glass_exit();
+            return;
+        }
+
+        err = glass_swap_buffers(&window);
 
         if (err != GLASS_OK) {
             glass_exit();

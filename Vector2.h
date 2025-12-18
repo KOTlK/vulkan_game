@@ -10,6 +10,7 @@ typedef union Vector2 {
 static inline Vector2 vector2_make(float x, float y);
 
 #if defined(GAME_MATH_IMPLEMENTATION)
+
 static inline Vector2 vector2_make(float x, float y) {
     Vector2 v = {
         .x = x,
@@ -18,4 +19,5 @@ static inline Vector2 vector2_make(float x, float y) {
 
     return v;
 }
+
 #endif // GAME_MATH_IMPLEMENTATION

@@ -31,7 +31,6 @@ static inline Matrix4 matrix4_ortho_2d(float left, float right, float top, float
 static inline Matrix4 matrix4_mvp(float cx, float cy, float left, float right, float top, float bottom, float px, float py, float r, float sx, float sy);
 static inline float   matrix4_det(Matrix4* mat);
 
-#define GAME_MATH_IMPLEMENTATION
 #ifdef GAME_MATH_IMPLEMENTATION
 static inline Matrix4 matrix4_make(float m00, float m10, float m20, float m30,
                                    float m01, float m11, float m21, float m31,
