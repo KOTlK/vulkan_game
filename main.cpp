@@ -47,14 +47,22 @@ static Transform Test_Transform = {
 
 static u64 Target_Fps = 75;
 
-// static inline float frand01() {
-//     return (float)rand() / RAND_MAX;
-// }
+static inline float frand01() {
+    return (float)rand() / RAND_MAX;
+}
 
-// static inline float frand(float min, float max) {
-//     float t = frand01();
-//     return (1.0f - t) * min + t * max;
-// }
+static inline float frand(float min, float max) {
+    float t = frand01();
+    return (1.0f - t) * min + t * max;
+}
+
+static inline Vector3 vector3_random(Vector3 min, Vector3 max) {
+    return Vector3 {
+        .x = frand(min.x, max.x),
+        .y = frand(min.y, max.y),
+        .z = frand(min.z, max.z),
+    };
+}
 
 int main(int argc, char** argv) {
     entity_manager_make(&em);
@@ -247,6 +255,10 @@ GlassErrorCode glass_render(Window* window) {
 
     render_shape_2d(Active_Material, &Shape, &Test_Transform);
 
+    BEGIN_ITERATE_COMPONENT(Transform)
+    render_shape_2d(Active_Material, &Shape, component);
+    END_ITERATE_COMPONENT()
+
     return GLASS_OK;
 }
 
@@ -333,22 +345,47 @@ void glass_game_code() {
     camera_update_ortho(&Cam);
     Logf("Cam position: %f, %f, %f, rotation: %f", Cam.position.x, Cam.position.y, Cam.position.z, Cam.rotation);
 
-    // if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_SPACE)) {
-    //     EntityHandle ent = entity_create(&em);
+    const Vector3 min_pos = Vector3 {
+        .x = -30.0f,
+        .y = -30.0f,
+        .z = 0
+    };
 
-    //     auto comp = ADD_COMPONENT(TestComponent, ent);
+    const Vector3 max_pos = Vector3 {
+        .x = 30.0f,
+        .y = 30.0f,
+        .z = 0
+    };
 
-    //     comp->a = rand();
-    //     comp->b = rand();
-    //     Logf("Created component: %d, a: %d, b: %d", ent.id, comp->a, comp->b);
-    //     queue_enqueue(&Entities, ent);
-    // }
+    const Vector3 min_scale = Vector3 {
+        .x = -2.0f,
+        .y = -2.0f,
+        .z = 1
+    };
 
-    // if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_R)) {
-    //     if (Entities.count > 0) {
-    //         EntityHandle ent = queue_dequeue(&Entities);
-    //         REMOVE_COMPONENT(TestComponent, ent);
-    //         Logf("Removed %d", ent.id);
-    //     }
-    // }
+    const Vector3 max_scale = Vector3 {
+        .x = 2.0f,
+        .y = 2.0f,
+        .z = 1
+    };
+
+    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_SPACE)) {
+        EntityHandle ent = entity_create(&em);
+
+        auto trans = ADD_COMPONENT(Transform, ent);
+
+        trans->position = vector3_random(min_pos, max_pos);
+        trans->rotation = radians(frand(-180.0f, 180.0f));
+        trans->scale    = vector3_random(min_scale, max_scale);
+        
+        queue_enqueue(&Entities, ent);
+    }
+
+    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_T)) {
+        if (Entities.count > 0) {
+            EntityHandle ent = queue_dequeue(&Entities);
+            REMOVE_COMPONENT(Transform, ent);
+            Logf("Removed %d", ent.id);
+        }
+    }
 }
