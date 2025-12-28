@@ -1,3 +1,4 @@
+#define GAME_MATH_IMPLEMENTATION
 #define TEXT_IMPLEMENTATION
 #include "glass.h"
 #include "render.h"
@@ -9,15 +10,16 @@
 #include <cstddef>
 #include "Vector3.h"
 #include "Matrix4.h"
+#include "Vector4.h"
 
 #ifdef GLASS_SDL
 #include "glass_sdl.h"
 #endif
 
 struct CameraData {
-    Matrix4 view;
-    Matrix4 proj;
-    Matrix4 view_proj;
+    Matrix4 v;
+    Matrix4 p;
+    Matrix4 vp;
     Vector3 position;
 };
 
@@ -41,6 +43,7 @@ struct Shader {
 
 struct Material {
     Shader* shader;
+    HashTable<String, GLint> uniforms;
 };
 
 struct RenderContext {
@@ -52,8 +55,13 @@ struct RenderContext {
     HashTable<Shape2D*, ShapeCache> shape_cache;
 };
 
-Material* Active_Material;
-Shape2D   Shape;
+// Material*  Active_Material;
+// Shape2D    Shape;
+CameraData Camera_Data;
+Camera*    Active_Camera;
+TimeData   Time_Data;
+u32        Camera_UBO;
+u32        Time_UBO;
 
 static inline void use_shader(Shader* shader);
 static inline ShapeCache get_shape_cache(Shape2D* shape);
@@ -92,46 +100,8 @@ RenderError render_init(Context* ctx) {
 
     Logf("Glad version: %i.", glad_version);
 
-    bool read = false;
-
-    String vert_text;
-    String frag_text;
-
-    read = read_entire_file("shaders/vert.shader", Allocator_Temp, &vert_text);
-
-    if (!read) {
-        Err("Cannot read vertex shader.");
-    }
-
-    read = read_entire_file("shaders/frag.shader", Allocator_Temp, &frag_text);
-
-    if (!read) {
-        Err("Cannot read fragment shader.");
-    }
-
-    RenderError err = RENDER_OK;
-
-    Shader* shader = shader_make(&vert_text, &frag_text, &err);
-    Active_Material = material_make(shader);
-
-    if (err) {
-        Errf("Cannot create active shader. %d", err);
-        return RENDER_INTERNAL_ERROR;
-    }
-
-    Vertex vertices[] = {
-        {{{   0.5f,  -0.5f, 0.0f }}, { 255, 0,   0,   255 }},
-        {{{   0.5f,   0.5f, 0.0f }}, { 0,   255, 0,   255 }},
-        {{{  -0.5f,   0.5f, 0.0f }}, { 0,   0,   255, 255 }},
-        {{{  -0.5f,  -0.5f, 0.0f }}, { 255, 255, 0, 255 }},
-    };
-
-    u16 indices[] = {
-        0, 1, 3,
-        1, 2, 3
-    };  
-
-    shape2d_make(vertices, indices, sizeof(vertices) / sizeof(Vertex), sizeof(indices) / sizeof(u16), &Shape);
+    glGenBuffers(1, &Camera_UBO);
+    glGenBuffers(1, &Time_UBO);
 
     return RENDER_OK;
 }
@@ -142,14 +112,12 @@ void render_destroy() {
 #endif
 }
 
-RenderError render_test() {
-    glClearColor(0.3f, 0.3f, 0.1f, 1.0f);
+void clear_color_buffer(Vector4 color) {
+    glClearColor(color.x, color.y, color.z, color.w);
     glClear(GL_COLOR_BUFFER_BIT);
+}
 
-    Matrix4 mat = matrix4_trs_2d(0, 0, 0, 1, 1);
-
-    render_shape_2d(Active_Material, &Shape, mat);
-    
+RenderError render_test() {
     return RENDER_OK;
 }
 
@@ -214,7 +182,31 @@ void shader_destroy(Shader* shader) {
 Material* material_make(Shader* shader) {
     Material* mat = list_append_empty(&Render_Context.materials);
 
-    mat->shader = shader;
+    mat->shader   = shader;
+    mat->uniforms = table_make<String, GLint>();
+
+    GLint uniform_count = 0;
+    glGetProgramiv(shader->gl_shader, GL_ACTIVE_UNIFORMS, &uniform_count);
+
+    for (GLint i = 0; i < uniform_count; ++i) {
+        GLchar name[256];
+        GLsizei length = 0;
+        GLint   size   = 0;
+        GLenum  type   = 0;
+
+        glGetActiveUniform(shader->gl_shader, i,
+                           sizeof(name),        
+                           &length,             
+                           &size,               
+                           &type,               
+                           name);
+
+
+        GLint location = glGetUniformLocation(shader->gl_shader, name);
+        Logf("Found uniform: %s, location: %d", name, location);
+
+        table_add(&mat->uniforms, string_make(name), location);
+    }
 
     return mat;
 }
@@ -223,16 +215,83 @@ void material_destroy(Material* mat) {
     
 }
 
-RenderError render_shape_2d(Material* mat, Shape2D* shape, Matrix4 trs) {
-    use_shader(mat->shader);
+void render_set_active_camera(Camera* cam) {
+    Active_Camera = cam;
+}
 
+void render_set_camera_matrices(Matrix4 v, Matrix4 p, Vector3 pos) {
+    Camera_Data.v      = v;
+    Camera_Data.p      = p;
+    Camera_Data.vp = p * v;
+    Camera_Data.position  = pos;
+
+    glBindBuffer(GL_UNIFORM_BUFFER, Camera_UBO);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(CameraData), &Camera_Data, GL_DYNAMIC_DRAW);
+
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+}
+
+void render_set_time(float dt, float time) {
+    Time_Data.dt   = dt;
+    Time_Data.time = time;
+    Time_Data.sin_time = sin(time);
+    Time_Data.cos_time = cos(time);
+
+    glBindBuffer(GL_UNIFORM_BUFFER, Time_UBO);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(TimeData), &Time_Data, GL_DYNAMIC_DRAW);
+
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+}
+
+RenderError render_shape_2d(Material* mat, Shape2D* shape, Transform* transform) {
     ShapeCache cache = get_shape_cache(shape);
 
+    Matrix4 model = matrix4_trs_2d(transform->position.x,
+                                   transform->position.y,
+                                   transform->rotation,
+                                   transform->scale.x,
+                                   transform->scale.y);
+
+    // Matrix4 mvp   = matrix4_mvp(Active_Camera->position.x, 
+    //                             Active_Camera->position.y, 
+    //                             Active_Camera->left,
+    //                             Active_Camera->right,
+    //                             Active_Camera->top,
+    //                             Active_Camera->bottom,
+    //                             transform->position.x,
+    //                             transform->position.y,
+    //                             transform->rotation,
+    //                             transform->scale.x,
+    //                             transform->scale.y);
+
+    Matrix4 mvp = model * Camera_Data.vp;
+
+    use_shader(mat->shader);
+
     glBindVertexArray(cache.vao);
+
+    material_set_matrix(mat, "model", model);
+    material_set_matrix(mat, "mvp", mvp);
 
     glDrawElements(GL_TRIANGLES, shape->index_count, GL_UNSIGNED_SHORT, 0);
 
     return RENDER_OK;
+}
+
+void material_set_matrix(Material* mat, String name, Matrix4 data) {
+    s32 location = material_get_uniform_location(mat, name);
+
+    glUniformMatrix4fv(location, 1, GL_FALSE, data.e);
+}
+
+void material_set_matrix(Material* mat, u32 location, Matrix4 data) {
+    glUniformMatrix4fv(location, 1, GL_FALSE, data.e);
+}
+
+s32 material_get_uniform_location(Material* mat, String name) {
+    Assertf(table_contains(&mat->uniforms, name), "Shader does not contains uniform with name %s", name.text);
+
+    return table_get(&mat->uniforms, name);
 }
 
 static inline void use_shader(Shader* shader) {
@@ -257,6 +316,9 @@ static inline ShapeCache get_shape_cache(Shape2D* shape) {
     glGenVertexArrays(1, &vao);
 
     glBindVertexArray(vao);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 0, Camera_UBO);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 1, Time_UBO);
+
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * shape->vertex_count, shape->vertices, GL_STATIC_DRAW);
 

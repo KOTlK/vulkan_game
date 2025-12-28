@@ -76,6 +76,11 @@ table_make(HashTable<Key, Value>* hash_table, Allocator* allocator = Allocator_P
 
 HASH_TABLE_TEMPLATE
 static inline
+HashTable<Key, Value>
+table_make(Allocator* allocator = Allocator_Persistent, u32 length = HASH_TABLE_INITIAL_LENGTH);
+
+HASH_TABLE_TEMPLATE
+static inline
 void
 table_realloc(HashTable<Key, Value>* hash_table, u32 length);
 
@@ -148,6 +153,25 @@ table_make(HashTable<Key, Value>* hash_table, Allocator* allocator, u32 length) 
     hash_table->count     = 0;
     hash_table->length    = length;
     hash_table->allocator = allocator;
+}
+
+HASH_TABLE_TEMPLATE
+static inline
+HashTable<Key, Value>
+table_make(Allocator* allocator, u32 length) {
+    HashTable<Key, Value> table{};
+
+    auto data = (HashTableSlot<Key, Value>*)allocator->alloc(sizeof(HashTableSlot<Key, Value>) * length);
+    Assert(data, "Cannot allocate memory for hash table data.");
+
+    memset(data, 0, sizeof(HashTableSlot<Key, Value>) * length);
+
+    table.data      = data;
+    table.count     = 0;
+    table.length    = length;
+    table.allocator = allocator;
+
+    return table;
 }
 
 HASH_TABLE_TEMPLATE

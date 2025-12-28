@@ -29,6 +29,11 @@ queue_make(Queue<T>* queue, u32 length = QUEUE_INITIAL_LENGTH, Allocator* alloca
 
 QUEUE_TEMPLATE
 static inline
+Queue<T>
+queue_make(u32 length = QUEUE_INITIAL_LENGTH, Allocator* allocator = Allocator_Persistent);
+
+QUEUE_TEMPLATE
+static inline
 void
 queue_realloc(Queue<T>* queue, u32 length);
 
@@ -72,6 +77,25 @@ queue_make(Queue<T>* queue, u32 length, Allocator* allocator) {
     queue->head      = 0;
     queue->tail      = 0;
     queue->allocator = allocator;
+}
+
+QUEUE_TEMPLATE
+static inline
+Queue<T>
+queue_make(u32 length, Allocator* allocator) {
+    Queue<T> queue{};
+    
+    auto data = AllocatorAlloc(T, allocator, sizeof(T) * length);
+    Assert(data, "Cannot allocate memory for queue data");
+
+    queue.data      = data;
+    queue.count     = 0;
+    queue.length    = length;
+    queue.head      = 0;
+    queue.tail      = 0;
+    queue.allocator = allocator;
+
+    return queue;
 }
 
 QUEUE_TEMPLATE

@@ -1,3 +1,5 @@
+#define GAME_MATH_IMPLEMENTATION
+#define TEXT_IMPLEMENTATION
 #include "glass.h"
 #include <cstdio>
 #include "basic.h"
@@ -16,91 +18,46 @@
 #include "array.h"
 #include "mathematics.h"
 #include "vector_utils.h"
-#include "rlist.h"
+#include "entities.h"
+#include "components.h"
+#include "list.h"
+#include "queue.h"
+#include "Vector4.h"
+#include "text.h"
 
 #define WIDTH  1280
 #define HEIGHT 720
 
-typedef struct Camera2D {
-    Vector2 position;
-    Vector2 size;
-    float   left;
-    float   right;
-    float   top;
-    float   bottom;
-} Camera2D;
-
-typedef struct PerFrameData {
-    Matrix4 view;
-    Matrix4 proj;
-    float   time;
-    float   dt;
-} PerFrameData;
-
-typedef struct Transform2d {
-    Vector2 position;
-    Vector2 scale;
-    float   rotation;
-} Transform2d;
-
-typedef struct Matrices {
-    Matrix4 model;
-    Matrix4 mvp;
-} Matrices;
-
 Context Game_Context{};
-// Window*          Wnd{};
-// Transform2d*   TRANSFORMS;
-// Matrices*      MATRICES;
-// u32            TRANSFORMS_COUNT  = 0;
-// u32            TRANSFORMS_LENGTH = 0;
 
 Matrix4 VIEW;
 Matrix4 PROJECTION;
 
-Camera2D CAMERA = {};
+Camera  Cam;
 
-// double TIME_DOUBLE = 0.0l;
-// float  TIME        = 0.0f;
-// float  DT          = 0.0f;
+static EntityManager em;
+static Material* Active_Material;
+static Shape2D   Shape;
 
-void print_instance_extensions();
+static Transform Test_Transform = {
+    .position = {{0, 0, 0}},
+    .scale    = {{1, 1, 1}},
+    .rotation = radians(0.0f)
+};
 
-static inline float frand01() {
-    return (float)rand() / RAND_MAX;
-}
+static u64 Target_Fps = 75;
 
-static inline float frand(float min, float max) {
-    float t = frand01();
-    return (1.0f - t) * min + t * max;
-}
+// static inline float frand01() {
+//     return (float)rand() / RAND_MAX;
+// }
+
+// static inline float frand(float min, float max) {
+//     float t = frand01();
+//     return (1.0f - t) * min + t * max;
+// }
 
 int main(int argc, char** argv) {
-    // srand(time(NULL));
-
-    // Vertex shape_vertices[] = {
-    //     {{{   0.5f,  -0.5f }}, { 255, 0,   0,   255 }},
-    //     {{{   0.5f,   0.5f }}, { 0,   255, 0,   255 }},
-    //     {{{  -0.5f,   0.5f }}, { 0,   0,   255, 255 }},
-    //     {{{  -0.5f,  -0.5f }}, { 255, 255, 255, 255 }},
-    // };
-
-    // u16 shape_indices[] = {
-    //     0, 1, 2, 0, 2, 3
-    // };
-
-    // Shape2D shape;
-
-    // shape2d_make(shape_vertices, shape_indices, 4, 6, &shape);
-
-    // for (u32 i = 0; i < shape.vertex_count; i++) {
-    //     Vertex v = shape.vertices[i];
-    //     printf("%f, %f, %d, %d, %d, %d\n", v.position.x, v.position.y, v.color.r, v.color.g, v.color.b, v.color.a);
-    // }
-
-    // for (u32 i = 0; i < shape.index_count; i++) {
-    //     printf("%d\n", shape.indices[i]);
-    // }
+    entity_manager_make(&em);
 
     const char* name = "Hello";
 
@@ -108,12 +65,17 @@ int main(int argc, char** argv) {
 
     Game_Context.wnd = glass_create_window(400, 100, WIDTH, HEIGHT, name, &err);
 
+
     if (err != GLASS_OK) {
         Errf("Cannot create window. %d", err);
         return 1;
     }
 
     Log("Window created.");
+
+    float aspect_ratio = (float)WIDTH / (float)HEIGHT;
+
+    camera_make_ortho(vector3_make(0,0,0), 0, 10, aspect_ratio, &Cam);
 
     RenderError render_err = render_init(&Game_Context);
 
@@ -124,12 +86,67 @@ int main(int argc, char** argv) {
 
     Log("Render initialized.");
 
+    bool read = false;
+
+    String vert_text;
+    String frag_text;
+
+    char buf[512];
+
+    sprintf(buf, "%s%s", glass_get_executable_path(), "shaders/vert.shader");
+
+    read = read_entire_file(buf, Allocator_Temp, &vert_text);
+
+    if (!read) {
+        Err("Cannot read vertex shader.");
+    }
+
+    sprintf(buf, "%s%s", glass_get_executable_path(), "shaders/frag.shader");
+
+    read = read_entire_file(buf, Allocator_Temp, &frag_text);
+
+    if (!read) {
+        Err("Cannot read fragment shader.");
+    }
+
+    Shader* shader = shader_make(&vert_text, &frag_text, &render_err);
+    Active_Material = material_make(shader);
+
+    if (err) {
+        Errf("Cannot create active shader. %d", err);
+        return RENDER_INTERNAL_ERROR;
+    }
+
+    // Vertex vertices[] = {
+    //     {{{  0.0f,   0.5f, 0.0f }}, { 255, 0,   0,   255 }},
+    //     {{{ -0.5f,   0.0f, 0.0f }}, { 0,   255, 0,   255 }},
+    //     {{{  0.5f,   0.0f, 0.0f }}, { 0,   0,   255, 255 }},
+    // };
+
+    // u16 indices[] = {
+    //     0, 1, 2,
+    // };  
+    Vertex vertices[] = {
+        {{{   0.5f,  -0.5f, 0.0f }}, { 255, 0,   0,   255 }},
+        {{{   0.5f,   0.5f, 0.0f }}, { 0,   255, 0,   255 }},
+        {{{  -0.5f,   0.5f, 0.0f }}, { 0,   0,   255, 255 }},
+        {{{  -0.5f,  -0.5f, 0.0f }}, { 255, 255, 0, 255 }},
+    };
+
+    u16 indices[] = {
+        0, 1, 2,
+        0, 2, 3
+    };  
+
+    shape2d_make(vertices, indices, sizeof(vertices) / sizeof(Vertex), sizeof(indices) / sizeof(u16), &Shape);
+
+    render_set_active_camera(&Cam);
+
     u64 last_time = glass_query_performance_counter();
     u64 current_time = 0;
 
     u64 max_fps           = 1000;
-    u64 target_fps        = 75;
-    u64 target_frame_time = 1000 / target_fps;
+    float dt_float = 0;
 
 #if MEMORY_DEBUG
     s64 persistent_memory_this_frame = 0;
@@ -167,17 +184,23 @@ int main(int argc, char** argv) {
         }
 
         if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_UP)) {
-            target_fps += 1;
-            target_fps = clamp(target_fps, 1ull, max_fps);
-            target_frame_time = 1000 / target_fps;
+            Target_Fps += 1;
+            Target_Fps = clamp(Target_Fps, 1ull, max_fps);
         } else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_DOWN)) {
-            target_fps -= 1;
-            target_fps = clamp(target_fps, 1ull, max_fps);
-            target_frame_time = 1000 / target_fps;
+            Target_Fps -= 1;
+            Target_Fps = clamp(Target_Fps, 1ull, max_fps);
         }
+
+        u64 target_frame_time = 1000 / Target_Fps;
 
         if (glass_exit_required())
             break;
+
+        Matrix4 view = matrix4_camera_view_2d(Cam.position);
+        Matrix4 proj = matrix4_ortho_2d(Cam.left, Cam.right, Cam.top, Cam.bottom);
+
+        render_set_camera_matrices(view, proj, Cam.position);
+        render_set_time(Game_Context.time.dt, Game_Context.time.time);
 
         glass_main_loop();
 
@@ -207,17 +230,10 @@ int main(int argc, char** argv) {
 
         u64 fps = (u64)(1.0l / dt);
 
-        // Logf("Delta Time: %f", dt);
-        // Logf("Target frame time: %llu", target_frame_time);
-        // Logf("Sleep time: %llu", sleep_time);
-        // Logf("Dt int: %llu", dt_int);
-
         char buf[1024];
 
         sprintf(buf, "fps: %llu, dt:%f, time:%f\n", fps, Game_Context.time.dt, Game_Context.time.time);
         glass_set_window_title(Game_Context.wnd, buf);
-
-        // glass_sleep(16);
     }
 
     render_destroy();
@@ -227,13 +243,9 @@ int main(int argc, char** argv) {
 }
 
 GlassErrorCode glass_render(Window* window) {
-    RenderError err = render_test();
+    clear_color_buffer(Vector4(0.3f, 0.3f, 0.1f, 1.0f));
 
-
-    if (err != RENDER_OK) {
-        Errf("Cannot render. Render error: %d.", err);
-        return GLASS_INTERNAL_ERROR;
-    }
+    render_shape_2d(Active_Material, &Shape, &Test_Transform);
 
     return GLASS_OK;
 }
@@ -246,4 +258,97 @@ GlassErrorCode glass_on_resize(u32 width, u32 height) {
 GlassErrorCode glass_on_move(u32 x, u32 y) {
     Logf("Moved. %i, %i.", x, y);
     return GLASS_OK;
+}
+
+Queue<EntityHandle> Entities = queue_make<EntityHandle>();
+
+void glass_game_code() {
+    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_ALPHA1)) {
+        Target_Fps = 1;
+    }
+
+    const float speed = 2.0f;
+    const float cam_speed = 3.0f;
+    const float angular_speed = 5.0f;
+    const float zoom_speed = 3.0f;
+    const float zoom_mult = 5.0f;
+
+    Vector3 direction = {};
+    Vector3 cam_direction = {};
+
+    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_W)) {
+        direction.y = 1.0f;
+    } else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_S)) {
+        direction.y = -1.0f;
+    }
+
+    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_D)) {
+        direction.x = 1.0f;
+    }else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_A)) {
+        direction.x = -1.0f;
+    }
+
+    Test_Transform.position += direction * (Game_Context.time.dt * speed);
+
+    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_Q)) {
+        Test_Transform.rotation += angular_speed * Game_Context.time.dt;
+    } else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_E)) {
+        Test_Transform.rotation -= angular_speed * Game_Context.time.dt;
+    }
+
+    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_I)) {
+        cam_direction.y = 1.0f;
+    } else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_K)) {
+        cam_direction.y = -1.0f;
+    }
+
+    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_L)) {
+        cam_direction.x = 1.0f;
+    }else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_J)) {
+        cam_direction.x = -1.0f;
+    }
+
+    float zoom = zoom_speed;
+
+    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_LEFT_SHIFT)) {
+        zoom *= zoom_mult;
+    }
+
+    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_U)) {
+        Cam.size -= zoom * Game_Context.time.dt;
+    } else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_O)) {
+        Cam.size += zoom * Game_Context.time.dt;
+    }
+
+    Cam.size = clamp(Cam.size, 0.01f, 100.0f);
+
+    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_R)) {
+        Cam.size = 5.0f;
+    }
+
+    // Vector3 cam_pos = Cam.position;
+
+    Cam.position += cam_direction * (cam_speed * Game_Context.time.dt);
+
+    camera_update_ortho(&Cam);
+    Logf("Cam position: %f, %f, %f, rotation: %f", Cam.position.x, Cam.position.y, Cam.position.z, Cam.rotation);
+
+    // if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_SPACE)) {
+    //     EntityHandle ent = entity_create(&em);
+
+    //     auto comp = ADD_COMPONENT(TestComponent, ent);
+
+    //     comp->a = rand();
+    //     comp->b = rand();
+    //     Logf("Created component: %d, a: %d, b: %d", ent.id, comp->a, comp->b);
+    //     queue_enqueue(&Entities, ent);
+    // }
+
+    // if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_R)) {
+    //     if (Entities.count > 0) {
+    //         EntityHandle ent = queue_dequeue(&Entities);
+    //         REMOVE_COMPONENT(TestComponent, ent);
+    //         Logf("Removed %d", ent.id);
+    //     }
+    // }
 }

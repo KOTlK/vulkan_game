@@ -25,5 +25,9 @@ layout (location = 0) out vec4 v2f_color;
 void main() {
    v2f_color = in_color;
 
-   gl_Position = vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
+   mat4 m = model;
+
+   // gl_Position = vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
+
+   gl_Position = mvp * vec4(in_pos, 1.0);
 }

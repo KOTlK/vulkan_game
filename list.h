@@ -60,6 +60,11 @@ list_make(List<T>* list, u32 length = LIST_DEFAULT_LENGTH, Allocator* allocator 
 
 LIST_TEMPLATE
 static inline
+List<T>
+list_make(u32 length = LIST_DEFAULT_LENGTH, Allocator* allocator = Allocator_Persistent);
+
+LIST_TEMPLATE
+static inline
 void
 list_realloc(List<T> *list, u32 length);
 
@@ -166,6 +171,23 @@ list_make(List<T>* list, u32 length, Allocator* allocator) {
     list->count     = 0;
     list->length    = length;
     list->allocator = allocator;
+}
+
+LIST_TEMPLATE
+static inline
+List<T>
+list_make(u32 length, Allocator* allocator) {
+    List<T> list{};
+
+    auto data = AllocatorAlloc(T, allocator, sizeof(T) * length);
+    Assert(data, "Cannot allocate list data.");
+
+    list.data      = data;
+    list.count     = 0;
+    list.length    = length;
+    list.allocator = allocator;
+
+    return list;
 }
 
 LIST_TEMPLATE

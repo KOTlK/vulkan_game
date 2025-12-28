@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include "debug.h"
 
+#define Calloc(type, count) (type*)malloc(sizeof(type) * count)
+
 static List<Window>            Windows;
 static Queue<u32>              Empty_Windows;
 static HashTable<u32, Window*> Window_By_Id;
@@ -78,8 +80,12 @@ void glass_destroy_window(Window* window) {
     }
 }
 
-extern void glass_set_window_title(Window* window, const char* title) {
+void glass_set_window_title(Window* window, const char* title) {
     SDL_SetWindowTitle(window->window, title);
+}
+
+const char* glass_get_executable_path() {
+    return SDL_GetBasePath();
 }
 
 void glass_exit() {
@@ -98,6 +104,8 @@ void glass_main_loop() {
     while(SDL_PollEvent(&event)) {
         dispatch_event(event);
     }
+
+    glass_game_code();
 
     for (Window& window : Windows) {
         if (window.should_close) {

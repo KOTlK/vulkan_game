@@ -161,13 +161,15 @@ extern GlassErrorCode glass_on_move(u32 x, u32 y);
 extern GlassErrorCode glass_swap_buffers(Window* window);
 extern void*          glass_get_proc_addr(const char* name);
 
+extern const char*    glass_get_executable_path();
+
 #if defined(WIN32)
 #include "windows.h"
 extern HWND      glass_win32_get_window_handle(Window* window);
 extern HINSTANCE glass_win32_get_instance(Window* window);
 #endif
 
-extern Surface* glass_create_surface();
+extern void glass_game_code();
 
 // rendering
 // extern GlassErrorCode glass_create_surface(Window* window, Surface* surface);

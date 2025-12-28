@@ -4,11 +4,11 @@
 #include "types.h"
 
 #define null NULL
-#define Malloc(type, size) (type*)malloc(size)
-#define Calloc(type, count) (type*)malloc(sizeof(type) * count)
-#define Realloc(type, ptr, new_size) (type*)realloc(ptr, new_size)
-#define Make(type) (type*)malloc(sizeof(type))
-#define Free(mem) free(mem)
+// #define Malloc(type, size) (type*)malloc(size)
+// #define Calloc(type, count) (type*)malloc(sizeof(type) * count)
+// #define Realloc(type, ptr, new_size) (type*)realloc(ptr, new_size)
+// #define Make(type) (type*)malloc(sizeof(type))
+// #define Free(mem) free(mem)
 
 #include "allocator.h"
 #include "std_allocator.h"

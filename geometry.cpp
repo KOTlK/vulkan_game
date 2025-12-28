@@ -2,6 +2,9 @@
 #include "types.h"
 #include <memory.h>
 
+#define Malloc(type, size) (type*)malloc(size)
+#define Free(ptr) free(ptr)
+
 void shape2d_make(Vertex* vertices, u16* indices, u32 vertex_count, u32 index_count, Shape2D* shape) {
     u32   size = sizeof(Vertex) * vertex_count + sizeof(u16) * index_count;
     char* data = Malloc(char, size);
