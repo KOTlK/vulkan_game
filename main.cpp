@@ -1,5 +1,7 @@
 #define GAME_MATH_IMPLEMENTATION
 #define TEXT_IMPLEMENTATION
+#define FILE_IMPLEMENTATION
+#define BITMAP_IMPLEMENTATION
 #include "glass.h"
 #include <cstdio>
 #include "basic.h"
@@ -24,6 +26,8 @@
 #include "queue.h"
 #include "Vector4.h"
 #include "text.h"
+#include "file.h"
+#include "bitmap.h"
 
 #define WIDTH  1280
 #define HEIGHT 720
@@ -343,7 +347,7 @@ void glass_game_code() {
     Cam.position += cam_direction * (cam_speed * Game_Context.time.dt);
 
     camera_update_ortho(&Cam);
-    Logf("Cam position: %f, %f, %f, rotation: %f", Cam.position.x, Cam.position.y, Cam.position.z, Cam.rotation);
+    // Logf("Cam position: %f, %f, %f, rotation: %f", Cam.position.x, Cam.position.y, Cam.position.z, Cam.rotation);
 
     const Vector3 min_pos = Vector3 {
         .x = -30.0f,
@@ -369,14 +373,18 @@ void glass_game_code() {
         .z = 1
     };
 
+    EntityManager* e = &em;
+
     if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_SPACE)) {
         EntityHandle ent = entity_create(&em);
 
-        auto trans = ADD_COMPONENT(Transform, ent);
+        Transform trans = {
+            .position = vector3_random(min_pos, max_pos),
+            .scale    = vector3_random(min_scale, max_scale),
+            .rotation = radians(frand(-180.0f, 180.0f)),
+        };
 
-        trans->position = vector3_random(min_pos, max_pos);
-        trans->rotation = radians(frand(-180.0f, 180.0f));
-        trans->scale    = vector3_random(min_scale, max_scale);
+        ADD_COMPONENT(Transform, e, ent, trans);
         
         queue_enqueue(&Entities, ent);
     }
@@ -384,7 +392,8 @@ void glass_game_code() {
     if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_T)) {
         if (Entities.count > 0) {
             EntityHandle ent = queue_dequeue(&Entities);
-            REMOVE_COMPONENT(Transform, ent);
+            entity_destroy(e, ent);
+            // REMOVE_COMPONENT(Transform, e, ent);
             Logf("Removed %d", ent.id);
         }
     }

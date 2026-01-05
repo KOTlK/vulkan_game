@@ -1,8 +1,13 @@
 #pragma once
 
 #include "basic.h"
+#include "hash_table.h"
+#include "list.h"
+#include "bitmap.h"
 
 typedef u32 Entity;
+
+static Bitmap<> Empty_Archetype;
 
 struct EntityHandle {
     u32 id;
@@ -10,10 +15,12 @@ struct EntityHandle {
 };
 
 struct EntitySlot {
-    u32 generation;
+    u32      generation;
+    Bitmap<> archetype;
 };
 
 struct EntityManager {
+    HashTable<Bitmap<>, List<Entity>> archetypes;
     EntitySlot* entities;
     u32*        free;
     u32         entities_count;

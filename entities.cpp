@@ -1,6 +1,12 @@
+#define BITMAP_IMPLEMENTATION
+
 #include "entities.h"
 #include "assert.h"
 #include "memory.h"
+#include "bitmap.h"
+#include "component_system.h"
+#include "components.h"
+#include "mathematics.h"
 
 #define START_ENTITY_LENGTH 1024
 #define REALLOC_STEP 256
@@ -8,6 +14,7 @@
 void entity_manager_make(EntityManager* em) {
     Assert(em, "Entity manager is null");
 
+    em->archetypes      = table_make<Bitmap<>, List<Entity>>();
     em->entities        = (EntitySlot*)malloc(sizeof(EntitySlot) * START_ENTITY_LENGTH);
     em->free            = (u32*)malloc(sizeof(u32) * START_ENTITY_LENGTH);
     em->entities_count  = 1;
@@ -60,6 +67,13 @@ void entity_destroy(EntityManager* em, EntityHandle handle) {
     Assert(entity_is_alive(em, handle), "Cannot destroy dead entity");
 
     em->entities[handle.id].generation++;
+
+    for (u32 i = 0; i < COMPONENTS_COUNT; i++) {
+        if (bitmap_test_bit(em->entities[handle.id].archetype, i)) {
+            auto table = get_component_table_by_bit(i);
+            component_table_remove(table, handle);
+        }
+    }
 
     if (em->free_count > 0 && 
         em->free[em->free_count - 1] < handle.id) {

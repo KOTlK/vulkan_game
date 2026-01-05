@@ -55,9 +55,5 @@ struct TestComponent {
 extern ComponentTable* All_Components[];
 extern ComponentTable* get_component_table_by_bit(u32 bit);
 
-extern ComponentTable TestComponent_s;
-extern u32 TestComponent_bit;
-
-extern ComponentTable Transform_s;
-extern u32 Transform_bit;
-#define COMPONENTS_COUNT 2
+#DECLARE_COMPONENT(TestComponent)
+#DECLARE_COMPONENT(Transform)
