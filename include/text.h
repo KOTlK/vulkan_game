@@ -42,6 +42,9 @@ struct String {
 
     char& operator[](u32 i) {
         Assert(text, "Cannot lookup uninitialized string, use string_make or constructor to initialize it.");
+        if (i >= length) {
+            Log("HEllo");
+        }
         Assert(i < length, "Index outside the bounds of the string");
         return text[i];
     }
@@ -102,10 +105,6 @@ static inline void    sb_clear(StringBuilder* sb);
 static inline String  sb_to_string(StringBuilder* sb, Allocator* allocator = Allocator_Persistent);
 static inline String* sb_to_string_ptr(StringBuilder* sb, Allocator* text_allocator = Allocator_Persistent, Allocator* ptr_allocator = Allocator_Persistent);
 static inline char*   sb_to_cstring(StringBuilder* sb, Allocator* allocator = Allocator_Persistent);
-
-// static inline bool   read_entire_file(const char* path, Allocator* allocator, String* str);
-// static inline bool   file_exists(const char* path);
-// static inline void   file_remove(const char* path);
 
 static inline u64 get_hash(String string) {
     return get_hash(string.text);
@@ -369,52 +368,5 @@ static inline char* sb_to_cstring(StringBuilder* sb, Allocator* allocator) {
 
     return str;
 }
-
-// static inline bool read_entire_file(const char* path, Allocator* allocator, String* str) {
-//     FILE* file = NULL;
-//     errno_t err = fopen_s(&file, path, "rb");
-
-//     if (!file) {
-//         Errf("Cannot open file %s. Error: %d", path, err);
-//         return false;
-//     }
-
-//     fseek(file, 0, SEEK_END);
-//     str->length = ftell(file);
-
-//     if (str->length == 0) {
-//         fclose(file);
-//         return false;
-//     }
-
-//     fseek(file, 0, SEEK_SET);
-
-//     str->text = AllocatorAlloc(char, allocator, str->length);
-
-//     if (!str->text) {
-//         fclose(file);
-//         return false;
-//     }
-
-//     fread(str->text, 1, str->length, file);
-//     fclose(file);
-//     str->allocator = allocator;
-
-//     return true;
-// }
-
-// static inline bool file_exists(const char* path) {
-//     bool exist = std::filesystem::exists(path);
-
-//     return exist;
-// }
-
-// static inline void file_remove(const char* path) {
-//     Assertf(file_exists(path), "Cannot remove file %s. File does not exist.", path);
-
-//     bool removed = std::filesystem::remove(path);
-
-//     Assertf(removed, "Cannot remove file %s", path);
-// }
 
 #endif // TEXT_IMPLEMENTATION

@@ -126,6 +126,11 @@ table_get(HashTable<Key, Value>* hash_table, Key key);
 
 HASH_TABLE_TEMPLATE
 static inline
+Value*
+table_get_ptr(HashTable<Key, Value>* hash_table, Key key);
+
+HASH_TABLE_TEMPLATE
+static inline
 bool
 table_try_get(HashTable<Key, Value>* hash_table, Key key, Value* value);
 
@@ -409,6 +414,25 @@ table_get(HashTable<Key, Value>* hash_table, Key key) {
         if (hash_table->data[index].tombstone)    continue;
 
         if (hash_table->data[index].hash == hash) return hash_table->data[index].value;
+        if (hash_table->data[index].hash == 0)    return NULL;
+    }
+}
+
+HASH_TABLE_TEMPLATE
+static inline
+Value*
+table_get_ptr(HashTable<Key, Value>* hash_table, Key key) {
+    Assert(hash_table->data, "Cannot get value from uninitalized hash table, use table_make to initialize it");
+    u64 hash      = get_hash(key);
+    u32 iteration = 0;
+    u32 index     = 0;
+
+    while (true) {
+        index = table_double_hash(hash, hash_table->length, iteration++);
+
+        if (hash_table->data[index].tombstone)    continue;
+
+        if (hash_table->data[index].hash == hash) return &hash_table->data[index].value;
         if (hash_table->data[index].hash == 0)    return NULL;
     }
 }

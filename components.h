@@ -1,8 +1,10 @@
 #pragma once
 
+#include "bitmap.h"
 #include "types.h"
-#include "component_system.h"
 #include "render.h"
+
+struct ComponentTable;
 
 struct TestComponent {
     u32 a;
@@ -29,11 +31,15 @@ struct TestComponent {
 
 #define ADD_COMPONENT(type, em, entity, component) \
     component_table_add(&type##_s, entity, component);\
+    archetype_remove(em, entity);\
     ENTITY_SET_COMPONENT_BIT(type, em, entity);\
+    archetype_add(em, entity);\
 
 #define REMOVE_COMPONENT(type, em, entity) \
     component_table_remove(&type##_s, entity);\
+    archetype_remove(em, entity);\
     ENTITY_CLEAR_COMPONENT_BIT(type, em, entity);\
+    archetype_add(em, entity);\
 
 #define HAS_COMPONENT(type, entity)    component_table_has(&type##_s, entity)
 #define GET_COMPONENT(type, entity)    component_table_get(&type##_s, entity)
@@ -52,6 +58,7 @@ struct TestComponent {
     Assertf(ENTITY_TEST_COMPONENT_BIT(type, em, handle), "Entity does not have the component, you want to remove. Component bit: %d", GET_COMPONENT_BIT(type));\
     bitmap_clear_bit(em->entities[handle.id].archetype, GET_COMPONENT_BIT(type));\
 
+
 extern ComponentTable* All_Components[];
 extern ComponentTable* get_component_table_by_bit(u32 bit);
 
@@ -60,4 +67,6 @@ extern u32 TestComponent_bit;
 
 extern ComponentTable Transform_s;
 extern u32 Transform_bit;
+
 #define COMPONENTS_COUNT 2
+typedef Bitmap<64> Archetype;

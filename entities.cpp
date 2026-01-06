@@ -1,6 +1,6 @@
 #define BITMAP_IMPLEMENTATION
 
-#include "entities.h"
+#include "component_system.h"
 #include "assert.h"
 #include "memory.h"
 #include "bitmap.h"
@@ -14,7 +14,7 @@
 void entity_manager_make(EntityManager* em) {
     Assert(em, "Entity manager is null");
 
-    em->archetypes      = table_make<Bitmap<>, List<Entity>>();
+    em->archetypes      = table_make<Archetype, List<Entity>>();
     em->entities        = (EntitySlot*)malloc(sizeof(EntitySlot) * START_ENTITY_LENGTH);
     em->free            = (u32*)malloc(sizeof(u32) * START_ENTITY_LENGTH);
     em->entities_count  = 1;
@@ -84,4 +84,26 @@ void entity_destroy(EntityManager* em, EntityHandle handle) {
     }
 
     em->free_count++;
+}
+
+Archetype entity_get_archetype(EntityManager* em, EntityHandle handle) {
+    Assertf(entity_is_alive(em, handle), "Cannot get archetype of an entity, entity is dead.");
+    return em->entities[handle.id].archetype;
+}
+
+void archetype_remove(EntityManager* em, EntityHandle handle) {
+    auto archetype = entity_get_archetype(em, handle);
+    if (archetype == Archetype_Zero) return;
+    Assertf(table_contains(&em->archetypes, archetype), "Archetype does not exist");
+    list_remove(table_get_ptr(&em->archetypes, archetype), handle.id);
+}
+
+void archetype_add(EntityManager* em, EntityHandle handle) {
+    auto archetype = entity_get_archetype(em, handle);
+    if (table_contains(&em->archetypes, archetype) == false) {
+        auto list = list_make<Entity>();
+        table_add(&em->archetypes, archetype, list);
+    }
+
+    list_append(table_get_ptr(&em->archetypes, archetype), handle.id);
 }

@@ -42,6 +42,18 @@ static inline void bitmap_set_all(Bitmap<bit_count>& bitmap);
 BITMAP_TEMPLATE
 static inline void bitmap_print(const Bitmap<bit_count>& bitmap);
 
+BITMAP_TEMPLATE
+static inline u64 get_hash(Bitmap<bit_count> bitmap) {
+    u32 count = bit_count / BITS_PER_SLOT;
+    u64 total = 0;
+
+    for (u32 i = 0; i < count; i++) {
+        total += bitmap.bits[i];
+    }
+
+    return total;
+}
+
 #ifdef BITMAP_IMPLEMENTATION
 
 #define BITMAP_TEMPLATE_IMPL template <u32 bit_count>

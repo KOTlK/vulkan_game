@@ -3,7 +3,10 @@
 #include "basic.h"
 #include "assert.h"
 #include "memory.h"
-#include "entities.h"
+#include "hash_table.h"
+#include "list.h"
+#include "bitmap.h"
+#include "components.h"
 
 #define COMPONENTS_ADD_REALLOC_COUNT 256
 
@@ -14,36 +17,62 @@
 #define COMPONENTS_INITIAL_SPARSE_LENGTH 1024
 #define COMPONENTS_INITIAL_DENSE_LENGTH  128
 
-struct ComponentTable {
-    void*      dense;
-    u32*       sparse;
-    u32*       entity_by_component_id;
-    u32        dense_count;
-    u32        dense_length;
-    u32        sparse_length;
-    u32        component_size;
+typedef u32 Entity;
+static Archetype Archetype_Zero = {};
+
+struct EntityHandle {
+    u32 id;
+    u32 generation;
 };
 
+struct EntitySlot {
+    u32       generation;
+    Archetype archetype;
+};
+
+struct EntityManager {
+    HashTable<Archetype, List<Entity>> archetypes;
+    EntitySlot* entities;
+    u32*        free;
+    u32         entities_count;
+    u32         entities_length;
+    u32         free_count;
+};
+
+struct ComponentTable {
+    void* dense;
+    u32*  sparse;
+    u32*  entity_by_component_id;
+    u32   dense_count;
+    u32   dense_length;
+    u32   sparse_length;
+    u32   component_size;
+};
+
+void         entity_manager_make(EntityManager* em);
+
+EntityHandle entity_create(EntityManager* em);
+bool         entity_is_alive(EntityManager* em, EntityHandle handle);
+void         entity_destroy(EntityManager* em, EntityHandle handle);
+Archetype    entity_get_archetype(EntityManager* em, EntityHandle handle);
+
+void         archetype_remove(EntityManager* em, EntityHandle handle);
+void         archetype_add(EntityManager* em, EntityHandle handle);
+
 static inline ComponentTable component_table_make(u32 component_size);
-
-static inline void component_table_free(ComponentTable* table);
-
-static inline void component_table_realloc_sparse(ComponentTable* table, u32 size);
-
-static inline void component_table_realloc_dense(ComponentTable* table, u32 size);
-
-template <typename T>
-static inline T* component_table_add(ComponentTable* table, EntityHandle entity, T component);
+static inline void           component_table_free(ComponentTable* table);
+static inline void           component_table_realloc_sparse(ComponentTable* table, u32 size);
+static inline void           component_table_realloc_dense(ComponentTable* table, u32 size);
+static inline bool           component_table_has(ComponentTable* table, EntityHandle entity);
+static inline void           component_table_remove(ComponentTable* table, EntityHandle entity);
 
 template <typename T>
-static inline T* component_table_get(ComponentTable* table, EntityHandle entity);
-
+static inline T*   component_table_add(ComponentTable* table, EntityHandle entity, T component);
+template <typename T>
+static inline T*   component_table_get(ComponentTable* table, EntityHandle entity);
 template <typename T>
 static inline void component_table_set(ComponentTable* table, EntityHandle handle, T component);
 
-static inline bool component_table_has(ComponentTable* table, EntityHandle entity);
-
-static inline void component_table_remove(ComponentTable* table, EntityHandle entity);
 
 static inline ComponentTable component_table_make(u32 component_size) {
     ComponentTable table = {
@@ -67,7 +96,6 @@ static inline void component_table_free(ComponentTable* table) {
 
     COMPONENTS_FREE(table->dense);
     COMPONENTS_FREE(table->sparse);
-    // COMPONENTS_FREE(table->free);
     COMPONENTS_FREE(table->entity_by_component_id);
 }
 
@@ -147,8 +175,6 @@ static inline void component_table_remove(ComponentTable* table, EntityHandle ha
 
     memcpy((char*)table->dense + (index * table->component_size), (char*)table->dense + (last * table->component_size), table->component_size);
     memset((char*)table->dense + last * table->component_size, 0, table->component_size);
-    // table->dense[index * table->component_size] = table->dense[last * component_size];
-    // table->dense[last * table->component_size]  = {};
     table->entity_by_component_id[index] = last_entity;
     table->entity_by_component_id[last]  = 0;
     table->sparse[entity]                = 0;

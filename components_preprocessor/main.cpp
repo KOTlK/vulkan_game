@@ -14,10 +14,11 @@ struct ComponentDeclaration {
     u32    index;
 };
 
-static inline bool is_letter(char c);
-static inline bool is_number(char c);
-static inline bool is_special(char c);
+static inline bool   is_letter(char c);
+static inline bool   is_number(char c);
+static inline bool   is_special(char c);
 static inline String parse_word(String in, StringBuilder* sb, u32* i);
+static inline u32    convert_to_multiple_64(u32 value);
 
 int main(int argc, char** argv) {
     List<ComponentDeclaration> components = list_make<ComponentDeclaration>();
@@ -48,7 +49,7 @@ int main(int argc, char** argv) {
 
     // .h file
     for (;;) {
-        if (i == input.length) break;
+        if (i >= input.length) break;
 
         auto c = input[i];
 
@@ -126,6 +127,12 @@ int main(int argc, char** argv) {
     }
 
     sprintf(buf, "#define COMPONENTS_COUNT %d\n", component_bit);
+
+    sb_append(&h_out, buf);
+
+    u32 bit_count = convert_to_multiple_64(component_bit);
+
+    sprintf(buf, "typedef Bitmap<%d> Archetype;\n", bit_count);
 
     sb_append(&h_out, buf);
 
@@ -220,6 +227,8 @@ static inline String parse_word(String in, StringBuilder* sb, u32* i) {
     sb_clear(sb);
 
     for (;;) {
+        if (*i >= in.length) break;
+
         char c = in[*i];
 
         if (*i == in.length) {
@@ -242,4 +251,14 @@ static inline String parse_word(String in, StringBuilder* sb, u32* i) {
     sb_clear(sb);
 
     return str;
+}
+
+static inline u32 convert_to_multiple_64(u32 value) {
+    if (value == 0) {
+        return 64;
+    }
+    
+    u32 result = (value + 63) & ~63;
+    
+    return (result < 64) ? 64 : result;
 }
