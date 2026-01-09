@@ -49,29 +49,30 @@ struct ComponentTable {
     u32   component_size;
 };
 
+
 void         entity_manager_make(EntityManager* em);
 
 EntityHandle entity_create(EntityManager* em);
 bool         entity_is_alive(EntityManager* em, EntityHandle handle);
 void         entity_destroy(EntityManager* em, EntityHandle handle);
-Archetype    entity_get_archetype(EntityManager* em, EntityHandle handle);
+Archetype&   entity_get_archetype(EntityManager* em, Entity entity);
 
-void         archetype_remove(EntityManager* em, EntityHandle handle);
-void         archetype_add(EntityManager* em, EntityHandle handle);
+void         archetype_remove(EntityManager* em, Entity entity);
+void         archetype_add(EntityManager* em, Entity entity);
 
 static inline ComponentTable component_table_make(u32 component_size);
 static inline void           component_table_free(ComponentTable* table);
 static inline void           component_table_realloc_sparse(ComponentTable* table, u32 size);
 static inline void           component_table_realloc_dense(ComponentTable* table, u32 size);
-static inline bool           component_table_has(ComponentTable* table, EntityHandle entity);
-static inline void           component_table_remove(ComponentTable* table, EntityHandle entity);
+static inline bool           component_table_has(ComponentTable* table, Entity entity);
+static inline void           component_table_remove(ComponentTable* table, Entity entity);
 
 template <typename T>
-static inline T*   component_table_add(ComponentTable* table, EntityHandle entity, T component);
+static inline T*   component_table_add(ComponentTable* table, Entity entity, T component);
 template <typename T>
-static inline T*   component_table_get(ComponentTable* table, EntityHandle entity);
+static inline T*   component_table_get(ComponentTable* table, Entity entity);
 template <typename T>
-static inline void component_table_set(ComponentTable* table, EntityHandle handle, T component);
+static inline void component_table_set(ComponentTable* table, Entity handle, T component);
 
 
 static inline ComponentTable component_table_make(u32 component_size) {
@@ -121,9 +122,9 @@ static inline void component_table_realloc_dense(ComponentTable* table, u32 size
 }
 
 template <typename T>
-static inline T* component_table_add(ComponentTable* table, EntityHandle handle, T component) {
+static inline T* component_table_add(ComponentTable* table, Entity entity, T component) {
+    Assert(entity != 0, "Cannot use zero entity.");
     u32 id        = table->dense_count;
-    u32 entity    = handle.id;
 
     if (id >= table->dense_length) {
         component_table_realloc_dense(table, id + COMPONENTS_ADD_REALLOC_COUNT);
@@ -147,38 +148,59 @@ static inline T* component_table_add(ComponentTable* table, EntityHandle handle,
 }
 
 template <typename T>
-static inline T* component_table_get(ComponentTable* table, EntityHandle handle) {
-    Assertf(component_table_has(table, handle), "Entity (%d) you want to get does not have the component.", handle.id);
+static inline T* component_table_get(ComponentTable* table, Entity entity) {
+    Assertf(component_table_has(table, entity), "Entity (%d) you want to get does not have the component.", entity);
     T* dense = (T*)table->dense;
-    return dense[table->sparse[handle.id]];
+    return &dense[table->sparse[entity]];
 }
 
-static inline bool component_table_has(ComponentTable* table, EntityHandle handle) {
-    if (table->sparse_length <= handle.id) return false;
+static inline bool component_table_has(ComponentTable* table, Entity entity) {
+    Assert(entity != 0, "Cannot use zero entity.");
+    if (table->sparse_length <= entity) return false;
 
-    return table->sparse[handle.id] != 0;
+    return table->sparse[entity] != 0;
 }
 
 template <typename T>
-static inline void component_table_set(ComponentTable* table, EntityHandle handle, T component) {
-    Assertf(component_table_has(table, handle), "Cannot set component. Entity does not have the component attached.");
+static inline void component_table_set(ComponentTable* table, Entity entity, T component) {
+    Assert(entity != 0, "Cannot use zero entity.");
+    Assertf(component_table_has(table, entity), "Cannot set component. Entity does not have the component attached.");
     T* dense = (T*)table->dense;
-    dense[table->sparse[handle.id]] = component;
+    dense[table->sparse[entity]] = component;
 }
 
-static inline void component_table_remove(ComponentTable* table, EntityHandle handle) {
-    u32 entity = handle.id;
-    Assertf(component_table_has(table, handle), "Entity (%d) you want to remove does not have the component.", entity);
+static inline void component_table_remove(ComponentTable* table, Entity entity) {
+    Assertf(component_table_has(table, entity), "Entity (%d) you want to remove does not have the component.", entity);
     u32 index       = table->sparse[entity];
     u32 last        = table->dense_count - 1;
     u32 last_entity = table->entity_by_component_id[last];
 
-    memcpy((char*)table->dense + (index * table->component_size), (char*)table->dense + (last * table->component_size), table->component_size);
-    memset((char*)table->dense + last * table->component_size, 0, table->component_size);
+    memcpy((char*)table->dense + (index * table->component_size), 
+           (char*)table->dense + (last * table->component_size), 
+           table->component_size);
+
+    memset((char*)table->dense + last * table->component_size, 
+            0, 
+            table->component_size);
+
     table->entity_by_component_id[index] = last_entity;
     table->entity_by_component_id[last]  = 0;
     table->sparse[entity]                = 0;
     table->sparse[last_entity]           = index;
 
     table->dense_count--;
+}
+
+static inline void entity_print_components(EntityManager* em, Entity entity) {
+    Assert(entity != 0, "Cannot use zero entity.");
+    auto archetype = em->entities[entity].archetype;
+
+    printf("Entity: %d. Components: ", entity);
+
+    for (u32 i = 0; i < COMPONENTS_COUNT; i++) {
+        if (bitmap_test_bit(archetype, i)) {
+            printf("%s, ", Component_Name_By_Bit[i]);
+        }
+    }
+    printf("\n");
 }

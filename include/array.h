@@ -133,7 +133,6 @@ array_free(Array<T>* array) {
     if (array->allocator == Allocator_Temp) return;
 
     AllocatorFree(array->allocator, array->data);
-    AllocatorFree(array->allocator, array);
 }
 
 ARRAY_TEMPLATE

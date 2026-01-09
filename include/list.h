@@ -223,7 +223,6 @@ list_free(List<T> *list) {
     if (list->allocator == Allocator_Temp) return;
 
     AllocatorFree(list->allocator, list->data);
-    AllocatorFree(list->allocator, list);
 }
 
 LIST_TEMPLATE

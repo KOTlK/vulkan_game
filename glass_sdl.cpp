@@ -69,14 +69,20 @@ Window* glass_create_window(u32 x, u32 y, u32 width, u32 height, const char* nam
 }
 
 void glass_destroy_window(Window* window) {
-    SDL_DestroyWindow(window->window);
-    u32 index = list_index_of_ptr(&Windows, window);
-    Windows[index] = {0};
+    u32 index      = list_index_of_ptr(&Windows, window);
     queue_enqueue(&Empty_Windows, index);
     table_remove(&Window_By_Id, window->sdl_id);
+    SDL_DestroyWindow(window->window);
+    Windows[index] = {};
 
     if (Windows.count == 0) {
         Should_Quit = true;
+    }
+}
+
+void glass_destroy_all_windows() {
+    for (Window& window : Windows) {
+        glass_destroy_window(&window);
     }
 }
 
@@ -88,11 +94,11 @@ const char* glass_get_executable_path() {
     return SDL_GetBasePath();
 }
 
-void glass_exit() {
-    for (Window& window : Windows) {
-        glass_destroy_window(&window);
-    }
-}
+// void glass_exit() {
+    // for (Window& window : Windows) {
+    //     glass_destroy_window(&window);
+    // }
+// }
 
 bool glass_exit_required() {
     return Should_Quit;

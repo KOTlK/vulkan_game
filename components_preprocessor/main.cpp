@@ -132,7 +132,11 @@ int main(int argc, char** argv) {
 
     u32 bit_count = convert_to_multiple_64(component_bit);
 
-    sprintf(buf, "typedef Bitmap<%d> Archetype;\n", bit_count);
+    sprintf(buf, "#define ARCHETYPE_BIT_COUNT %d\n", bit_count);
+
+    sb_append(&h_out, buf);
+
+    sprintf(buf, "typedef Bitmap<ARCHETYPE_BIT_COUNT> Archetype;\n");
 
     sb_append(&h_out, buf);
 
@@ -174,6 +178,15 @@ int main(int argc, char** argv) {
 
     for (auto c : components) {
         sprintf(buf, "  &%s_s,", c.type.text);
+        sb_append_line(&cpp_out, buf);
+    }
+
+    sb_append_line(&cpp_out, "};");
+
+    sb_append_line(&cpp_out, "const char* Component_Name_By_Bit[] = {");
+
+    for (auto c : components) {
+        sprintf(buf, "  \"%s\",", c.type.text);
         sb_append_line(&cpp_out, buf);
     }
 

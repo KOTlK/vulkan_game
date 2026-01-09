@@ -136,6 +136,7 @@ enum GlassScancode {
 // window management
 extern Window*        glass_create_window(u32 x, u32 y, u32 width, u32 height, const char* name, GlassErrorCode* err);
 extern void           glass_destroy_window(Window* window);
+extern void           glass_destroy_all_windows();
 
 extern void           glass_exit();
 extern bool           glass_exit_required();

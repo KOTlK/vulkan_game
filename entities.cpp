@@ -68,10 +68,14 @@ void entity_destroy(EntityManager* em, EntityHandle handle) {
 
     em->entities[handle.id].generation++;
 
+    archetype_remove(em, handle.id);
+
     for (u32 i = 0; i < COMPONENTS_COUNT; i++) {
         if (bitmap_test_bit(em->entities[handle.id].archetype, i)) {
             auto table = get_component_table_by_bit(i);
-            component_table_remove(table, handle);
+            archetype_remove(em, handle.id);
+            component_table_remove(table, handle.id);
+            bitmap_clear_bit(em->entities[handle.id].archetype, i);
         }
     }
 
@@ -86,24 +90,31 @@ void entity_destroy(EntityManager* em, EntityHandle handle) {
     em->free_count++;
 }
 
-Archetype entity_get_archetype(EntityManager* em, EntityHandle handle) {
-    Assertf(entity_is_alive(em, handle), "Cannot get archetype of an entity, entity is dead.");
-    return em->entities[handle.id].archetype;
+Archetype& entity_get_archetype(EntityManager* em, Entity entity) {
+    return em->entities[entity].archetype;
 }
 
-void archetype_remove(EntityManager* em, EntityHandle handle) {
-    auto archetype = entity_get_archetype(em, handle);
+void archetype_remove(EntityManager* em, Entity entity) {
+    auto archetype = entity_get_archetype(em, entity);
     if (archetype == Archetype_Zero) return;
-    Assertf(table_contains(&em->archetypes, archetype), "Archetype does not exist");
-    list_remove(table_get_ptr(&em->archetypes, archetype), handle.id);
+
+    if (table_contains(&em->archetypes, archetype)) {
+        auto list = table_get_ptr(&em->archetypes, archetype);
+        list_remove(list, entity);
+        if (list->count == 0) {
+            list_free(list);
+            table_remove(&em->archetypes, archetype);
+        }
+    }
 }
 
-void archetype_add(EntityManager* em, EntityHandle handle) {
-    auto archetype = entity_get_archetype(em, handle);
+void archetype_add(EntityManager* em, Entity entity) {
+    auto archetype = entity_get_archetype(em, entity);
+    
     if (table_contains(&em->archetypes, archetype) == false) {
         auto list = list_make<Entity>();
         table_add(&em->archetypes, archetype, list);
     }
 
-    list_append(table_get_ptr(&em->archetypes, archetype), handle.id);
+    list_append(table_get_ptr(&em->archetypes, archetype), entity);
 }

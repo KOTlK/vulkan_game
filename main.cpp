@@ -21,7 +21,6 @@
 #include "mathematics.h"
 #include "vector_utils.h"
 #include "components.h"
-// #include "entities.h"
 #include "component_system.h"
 #include "list.h"
 #include "queue.h"
@@ -77,7 +76,6 @@ int main(int argc, char** argv) {
     GlassErrorCode err = GLASS_OK;
 
     Game_Context.wnd = glass_create_window(400, 100, WIDTH, HEIGHT, name, &err);
-
 
     if (err != GLASS_OK) {
         Errf("Cannot create window. %d", err);
@@ -159,7 +157,7 @@ int main(int argc, char** argv) {
     u64 current_time = 0;
 
     u64 max_fps           = 1000;
-    float dt_float = 0;
+    // float dt_float = 0;
 
 #if MEMORY_DEBUG
     s64 persistent_memory_this_frame = 0;
@@ -206,8 +204,10 @@ int main(int argc, char** argv) {
 
         u64 target_frame_time = 1000 / Target_Fps;
 
-        if (glass_exit_required())
+        if (glass_exit_required()) {
+            glass_exit();
             break;
+        }
 
         Matrix4 view = matrix4_camera_view_2d(Cam.position);
         Matrix4 proj = matrix4_ortho_2d(Cam.left, Cam.right, Cam.top, Cam.bottom);
@@ -249,10 +249,13 @@ int main(int argc, char** argv) {
         glass_set_window_title(Game_Context.wnd, buf);
     }
 
-    render_destroy();
-    glass_destroy_window(Game_Context.wnd);
-
     return 0;
+}
+
+void glass_exit() {
+    render_destroy();
+
+    glass_destroy_all_windows();
 }
 
 GlassErrorCode glass_render(Window* window) {
@@ -260,9 +263,24 @@ GlassErrorCode glass_render(Window* window) {
 
     render_shape_2d(Active_Material, &Shape, &Test_Transform);
 
-    BEGIN_ITERATE_COMPONENT(Transform)
-    render_shape_2d(Active_Material, &Shape, component);
-    END_ITERATE_COMPONENT()
+    // Logf("Archetypes count: %d", em.archetypes.count);
+
+    // for (auto [archetype, list] : em.archetypes) {
+    //     printf("Archetype: ");
+    //     bitmap_print(archetype);
+    //     printf("Entities: ");
+
+    //     for(auto entity : list) {
+    //         printf("%d, ", entity);
+    //     }
+    //     printf("\n");
+    // }
+
+    EntityManager* emp = &em;
+
+    BEGIN_ITERATE_COMPONENTS_2(emp, Transform, Renderer2D)
+    render_shape_2d(Renderer2D_c->material, Renderer2D_c->shape, Transform_c);
+    END_ITERATE_COMPONENTS_2()
 
     return GLASS_OK;
 }
@@ -385,7 +403,24 @@ void glass_game_code() {
             .rotation = radians(frand(-180.0f, 180.0f)),
         };
 
-        ADD_COMPONENT(Transform, e, ent, trans);
+        TestComponent test = {
+            .a = 2,
+            .b = 3
+        };
+
+        TestComponent2 test2 = {
+            .c = 2,
+        };
+
+        Renderer2D renderer = {
+            .shape    = &Shape,
+            .material = Active_Material
+        };
+
+        ADD_COMPONENT(Transform, e, ent.id, trans);
+        ADD_COMPONENT(TestComponent, e, ent.id, test);
+        ADD_COMPONENT(Renderer2D, e, ent.id, renderer);
+        ADD_COMPONENT(TestComponent2, e, ent.id, test2);
         
         queue_enqueue(&Entities, ent);
     }
@@ -394,8 +429,19 @@ void glass_game_code() {
         if (Entities.count > 0) {
             EntityHandle ent = queue_dequeue(&Entities);
             entity_destroy(e, ent);
-            // REMOVE_COMPONENT(Transform, e, ent);
             Logf("Removed %d", ent.id);
+        }
+    }
+
+    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_Z)) {
+        if (Entities.count > 0) {
+            for(auto ent : Entities) {
+                if (HAS_COMPONENT(TestComponent2, e, ent.id)) {
+                    entity_print_components(e, ent.id);
+                    REMOVE_COMPONENT(TestComponent2, e, ent.id);
+                    break;
+                }
+            }
         }
     }
 }

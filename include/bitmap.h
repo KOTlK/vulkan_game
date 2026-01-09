@@ -21,6 +21,9 @@ static inline bool operator==(const Bitmap<bit_count> lhs, const Bitmap<bit_coun
 BITMAP_TEMPLATE
 static inline bool operator!=(const Bitmap<bit_count>& lhs, const Bitmap<bit_count>& rhs);
 
+template<u32 bit_count = 256, typename... Args>
+static inline Bitmap<bit_count> bitmap_make(Args... args);
+
 BITMAP_TEMPLATE
 static inline void bitmap_set_bit(Bitmap<bit_count>& bitmap, const u32 bit);
 
@@ -43,6 +46,9 @@ BITMAP_TEMPLATE
 static inline void bitmap_print(const Bitmap<bit_count>& bitmap);
 
 BITMAP_TEMPLATE
+static inline Bitmap<bit_count> bitmap_and(Bitmap<bit_count>& a, Bitmap<bit_count>& b);
+
+BITMAP_TEMPLATE
 static inline u64 get_hash(Bitmap<bit_count> bitmap) {
     u32 count = bit_count / BITS_PER_SLOT;
     u64 total = 0;
@@ -57,6 +63,17 @@ static inline u64 get_hash(Bitmap<bit_count> bitmap) {
 #ifdef BITMAP_IMPLEMENTATION
 
 #define BITMAP_TEMPLATE_IMPL template <u32 bit_count>
+
+template<u32 bit_count, typename... Args>
+static inline Bitmap<bit_count> bitmap_make(Args... args) {
+    Bitmap<bit_count> bitmap = {};
+    
+    for (const auto arg : {args...}) {
+        bitmap_set_bit(bitmap, arg);
+    }
+
+    return bitmap;
+}
 
 BITMAP_TEMPLATE_IMPL
 static inline bool operator==(const Bitmap<bit_count> lhs, const Bitmap<bit_count> rhs) {
@@ -131,8 +148,20 @@ static inline void bitmap_set_all(Bitmap<bit_count>& bitmap) {
 }
 
 BITMAP_TEMPLATE_IMPL
+static inline Bitmap<bit_count> bitmap_and(Bitmap<bit_count>& a, Bitmap<bit_count>& b) {
+    Bitmap<bit_count> res;
+    u32 count = bit_count / BITS_PER_SLOT;
+
+    for (u32 i = 0; i < count; i++) {
+        res.bits[i] = a.bits[i] & b.bits[i];
+    }
+
+    return res;
+}
+
+BITMAP_TEMPLATE_IMPL
 static inline void bitmap_print(const Bitmap<bit_count>& bitmap) {
-    printf("Bitmap [%u]: ", bit_count);
+    // printf("Bitmap [%u]: ", bit_count);
     
     for (u32 i = 0; i < bit_count; i++) {
         u32 index = i / BITS_PER_SLOT;

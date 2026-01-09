@@ -1,6 +1,5 @@
 #pragma once
 
-// #include "basic.h"
 #include "types.h"
 #include "geometry.h"
 #include "Vector2.h"
@@ -13,7 +12,6 @@
 struct Window;
 struct Shader;
 struct Material;
-// struct CommandBuffer;
 
 struct Camera {
     Vector3 position;
@@ -30,6 +28,11 @@ struct Transform {
     Vector3 position;
     Vector3 scale;
     float   rotation;
+};
+
+struct Renderer2D {
+    Shape2D*  shape;
+    Material* material;
 };
 
 enum RenderError {

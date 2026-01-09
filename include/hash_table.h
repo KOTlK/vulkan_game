@@ -5,6 +5,7 @@
 #include "allocator.h"
 #include <memory.h>
 #include "hash_functions.h"
+#include "debug.h"
 
 #define HASH_TABLE_INITIAL_LENGTH  256
 #define HASH_TABLE_REALLOC_STEP    128
@@ -18,6 +19,44 @@ struct HashTableSlot {
     Value value;
     u64   hash;
     bool  tombstone;
+};
+
+HASH_TABLE_TEMPLATE
+struct HashTableIterator {
+    HashTableSlot<Key, Value>* slots;
+    u32                        current;
+    u32                        length;
+
+    HashTableIterator(HashTableSlot<Key, Value>* s, u32 start, u32 len)
+        : slots(s), current(start), length(len) {
+        advance_to_valid();
+    }
+
+    void advance_to_valid() {
+        while (current < length && 
+               (slots[current].hash == 0 || slots[current].tombstone)) {
+            ++current;
+        }
+    }
+
+    HashTableIterator& operator++() {
+        ++current;
+        advance_to_valid();
+        return *this;
+    }
+
+    bool operator!=(const HashTableIterator& other) const {
+        return current != other.current;
+    }
+
+    struct Entry {
+        Key&   key;
+        Value& value;
+    };
+
+    Entry operator*() const {
+        return { slots[current].key, slots[current].value };
+    }
 };
 
 HASH_TABLE_TEMPLATE
@@ -40,11 +79,12 @@ struct HashTable {
             index = table_double_hash(hash, length, iteration++);
 
             if (data[index].tombstone)    continue;
-            if (data[index].hash == hash) break;
-            if (data[index].hash == 0)    break;
+            if (data[index].hash == hash && data[index].key == key) break;
+            if (data[index].hash == 0) {
+                Errf("The key was not presented in the hash table.");
+                return {};
+            };
         }
-
-        Assert(data[index].hash == hash, "The key was not presented in the hash table.");
 
         return data[index].value;
     }
@@ -59,15 +99,82 @@ struct HashTable {
             index = table_double_hash(hash, length, iteration++);
 
             if (data[index].tombstone)    continue;
-            if (data[index].hash == hash) break;
-            if (data[index].hash == 0)    break;
+            if (data[index].hash == hash && data[index].key == key) break;
+            if (data[index].hash == 0) {
+                Errf("The key was not presented in the hash table.");
+                return {};
+            };
         }
-
-        Assert(data[index].hash == hash, "The key was not presented in the hash table.");
 
         return data[index].value;
     }
+
+    HashTableIterator<Key, Value> begin() {
+        return HashTableIterator(data, 0, length);
+    }
+
+    HashTableIterator<Key, Value> end() {
+        return HashTableIterator(data, length, length);
+    }
 };
+
+// Iterator
+// HASH_TABLE_TEMPLATE
+// struct HashTableIterator {
+//     HashTableSlot<Key, Value>* slots;
+//     u32                        current;
+//     u32                        length;
+
+//     HashTableIterator(HashTableSlot<Key, Value>* s, u32 start, u32 len)
+//         : slots(s), current(start), length(len) {
+//         advance_to_valid();
+//     }
+
+//     void advance_to_valid() {
+//         while (current < length && 
+//                (slots[current].hash == 0 || slots[current].tombstone)) {
+//             ++current;
+//         }
+//     }
+
+//     HashTableIterator& operator++() {
+//         ++current;
+//         advance_to_valid();
+//         return *this;
+//     }
+
+//     bool operator!=(const HashTableIterator& other) const {
+//         return current != other.current;
+//     }
+
+//     struct Entry {
+//         Key&   key;
+//         Value& value;
+//     };
+
+//     Entry operator*() const {
+//         return { slots[current].key, slots[current].value };
+//     }
+// };
+
+// HASH_TABLE_TEMPLATE
+// struct HashTableRange {
+//     HashTable<Key, Value>* table;
+
+//     HashTableIterator<Key, Value> begin() {
+//         return HashTableIterator<Key, Value>(table->data, 0, table->length);
+//     }
+
+//     HashTableIterator<Key, Value> end() {
+//         return HashTableIterator<Key, Value>(table->data, table->length, table->length);
+//     }
+// };
+
+// HASH_TABLE_TEMPLATE
+// static inline
+// HashTableRange<Key, Value> iterate(HashTable<Key, Value>* table) {
+//     return { table };
+// }
 
 HASH_TABLE_TEMPLATE
 static inline
@@ -133,6 +240,11 @@ HASH_TABLE_TEMPLATE
 static inline
 bool
 table_try_get(HashTable<Key, Value>* hash_table, Key key, Value* value);
+
+HASH_TABLE_TEMPLATE
+static inline
+bool
+table_try_get_ptr(HashTable<Key, Value>* hash_table, Key key, Value** value);
 
 template <typename Key, typename Value, typename Iterator>
 static inline
@@ -204,6 +316,7 @@ table_realloc(HashTable<Key, Value>* hash_table, u32 length) {
             }
 
             new_data[index].hash      = hash_table->data[i].hash;
+            new_data[index].key       = hash_table->data[i].key;
             new_data[index].value     = hash_table->data[i].value;
             new_data[index].tombstone = false;
         }
@@ -226,7 +339,6 @@ table_free(HashTable<Key, Value>* hash_table) {
     if (hash_table->allocator == Allocator_Temp) return;
 
     AllocatorFree(hash_table->allocator, hash_table->data);
-    AllocatorFree(hash_table->allocator, hash_table);
 }
 
 HASH_TABLE_TEMPLATE
@@ -242,16 +354,18 @@ table_add(HashTable<Key, Value>* hash_table, Key key, Value value) {
     while (true) {
         index = table_double_hash(hash, hash_table->length, iteration++);
 
-        if (hash_table->data[index].tombstone)    continue;
-        if (hash_table->data[index].hash == hash) break;
+        if (hash_table->data[index].tombstone)    break;
         if (hash_table->data[index].hash == 0)    break;
+        if (hash_table->data[index].hash == hash && hash_table->data[index].key == key) {
+            Err("An item with the same key has already been added.");
+            return;
+        }
     }
 
-    Assert(hash_table->data[index].hash != hash, "An item with the same key has already been added.");
-
-    auto slot = HashTableSlot<Key, Value> {};
+    auto slot  = HashTableSlot<Key, Value> {};
     slot.hash  = hash;
     slot.value = value;
+    slot.key   = key;
 
     hash_table->data[index] = slot;
     hash_table->count++;
@@ -276,15 +390,17 @@ table_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
         index = table_double_hash(hash, hash_table->length, iteration++);
 
         if (hash_table->data[index].tombstone)    continue;
-        if (hash_table->data[index].hash == hash) break;
         if (hash_table->data[index].hash == 0)    break;
+        if (hash_table->data[index].hash == hash && hash_table->hash_table->data[index].key == key) {
+            Err("The key is not presented in the hash table.");
+            return;
+        }
     }
 
-    Assert(hash_table->data[index].hash == hash, "The key is not presented in the hash table.");
-
-    auto slot  = HashTableSlot<Key, Value> {0};
+    auto slot  = HashTableSlot<Key, Value> {};
     slot.hash  = hash;
     slot.value = value;
+    slot.key   = key;
 
     hash_table->data[index] = slot;
 }
@@ -301,20 +417,21 @@ table_add_or_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
     while (true) {
         index = table_double_hash(hash, hash_table->length, iteration++);
 
-        if (hash_table->data[index].tombstone)    continue;
-        if (hash_table->data[index].hash == hash) break;
+        if (hash_table->data[index].tombstone)    break;
+        if (hash_table->data[index].hash == hash && hash_table->data[index].key == key) break;
         if (hash_table->data[index].hash == 0)    break;
     }
 
     bool has = false;
 
-    if (hash_table->data[index].hash == hash) {
+    if (hash_table->data[index].hash == hash && hash_table->data[index].key == key) {
         has = true;
     }
 
-    auto slot = HashTableSlot<Key, Value> {0};
+    auto slot = HashTableSlot<Key, Value> {};
     slot.hash  = hash;
     slot.value = value;
+    slot.key   = key;
     hash_table->data[index] = slot;
 
     if (!has) {
@@ -342,13 +459,17 @@ table_remove(HashTable<Key, Value>* hash_table, Key key) {
         index = table_double_hash(hash, hash_table->length, iteration++);
 
         if (hash_table->data[index].tombstone)    continue;
-        if (hash_table->data[index].hash == hash) break;
-        if (hash_table->data[index].hash == 0)    break;
+        if (hash_table->data[index].hash == hash && hash_table->data[index].key == key) break;
+        if (hash_table->data[index].hash == 0) {
+            Err("A key, you want to remove is not present in the hash table.");
+            return;
+        }
     }
 
     hash_table->data[index].tombstone = true;
     hash_table->data[index].hash      = 0;
-    hash_table->data[index].value     = {0};
+    hash_table->data[index].value     = {};
+    hash_table->data[index].key       = {};
     hash_table->count--;
 }
 
@@ -365,17 +486,17 @@ table_remove_if_contains(HashTable<Key, Value>* hash_table, Key key) {
         index = table_double_hash(hash, hash_table->length, iteration++);
 
         if (hash_table->data[index].tombstone)    continue;
-        if (hash_table->data[index].hash == hash) break;
+        if (hash_table->data[index].hash == hash && hash_table->data[index].key == key) break;
         if (hash_table->data[index].hash == 0)    break;
     }
 
-    if (hash_table->data[index].hash != hash) {
+    if (hash_table->data[index].hash != hash || hash_table->data[index].key != key) {
         return false;
     }
 
     hash_table->data[index].tombstone = true;
     hash_table->data[index].hash      = 0;
-    hash_table->data[index].value     = {0};
+    hash_table->data[index].value     = {};
     hash_table->count--;
 
     return true;
@@ -394,7 +515,7 @@ table_contains(HashTable<Key, Value>* hash_table, Key key) {
         index = table_double_hash(hash, hash_table->length, iteration++);
 
         if (hash_table->data[index].tombstone)    continue;
-        if (hash_table->data[index].hash == hash) return true;
+        if (hash_table->data[index].hash == hash && hash_table->data[index].key == key) return true;
         if (hash_table->data[index].hash == 0)    return false;
     }
 }
@@ -413,7 +534,7 @@ table_get(HashTable<Key, Value>* hash_table, Key key) {
 
         if (hash_table->data[index].tombstone)    continue;
 
-        if (hash_table->data[index].hash == hash) return hash_table->data[index].value;
+        if (hash_table->data[index].hash == hash && hash_table->data[index].key == key) return hash_table->data[index].value;
         if (hash_table->data[index].hash == 0)    return NULL;
     }
 }
@@ -432,7 +553,7 @@ table_get_ptr(HashTable<Key, Value>* hash_table, Key key) {
 
         if (hash_table->data[index].tombstone)    continue;
 
-        if (hash_table->data[index].hash == hash) return &hash_table->data[index].value;
+        if (hash_table->data[index].hash == hash && hash_table->data[index].key == key) return &hash_table->data[index].value;
         if (hash_table->data[index].hash == 0)    return NULL;
     }
 }
@@ -451,13 +572,39 @@ table_try_get(HashTable<Key, Value>* hash_table, Key key, Value* value) {
 
         if (hash_table->data[index].tombstone)    continue;
 
-        if (hash_table->data[index].hash == hash) {
+        if (hash_table->data[index].hash == hash && hash_table->data[index].key == key) {
             *value = hash_table->data[index].value;
             return true;
         }
         
         if (hash_table->data[index].hash == 0)    return false;
     }
+
+    return false;
+}
+
+HASH_TABLE_TEMPLATE
+static inline
+bool
+table_try_get_ptr(HashTable<Key, Value>* hash_table, Key key, Value** value) {
+    Assert(hash_table->data, "Cannot get value from uninitalized hash table, use table_make to initialize it");
+    u64 hash      = get_hash(key);
+    u32 iteration = 0;
+    u32 index     = 0;
+
+    while (true) {
+        index = table_double_hash(hash, hash_table->length, iteration++);
+
+        if (hash_table->data[index].tombstone)    continue;
+
+        if (hash_table->data[index].hash == hash && hash_table->data[index].key == key) {
+            *value = &hash_table->data[index].value;
+            return true;
+        }
+        
+        if (hash_table->data[index].hash == 0)    return false;
+    }
+    return false;
 }
 
 template <typename Key, typename Value, typename Iterator>

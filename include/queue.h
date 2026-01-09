@@ -10,6 +10,30 @@
 #define QUEUE_TEMPLATE template <typename T>
 
 QUEUE_TEMPLATE
+struct QueueIterator {
+    T* data;
+    u32 current;
+    u32 length;
+
+    QueueIterator(T* data, u32 current, u32 length) :
+        data(data), current(current % length), length(length) {
+    }
+    
+    QueueIterator& operator++() {
+        current = (current + 1) % length;
+        return *this;
+    }
+
+    bool operator!=(const QueueIterator& other) const {
+        return current != other.current;
+    }
+
+    T operator*() const {
+        return data[current];
+    }
+};
+
+QUEUE_TEMPLATE
 struct Queue {
     T*         data;
     Allocator* allocator;
@@ -20,7 +44,30 @@ struct Queue {
 
     Queue() : data(NULL), allocator(NULL), count(0), length(0), head(0), tail(0){};
     ~Queue() = default;
+
+    QueueIterator<T> begin() {
+        return QueueIterator(data, head, length);
+    }
+
+    QueueIterator<T> end() {
+        return QueueIterator(data, tail, length);
+    }
 };
+
+
+
+// QUEUE_TEMPLATE
+// struct QueueRange {
+//     Queue<T> queue;
+
+//     QueueIterator<T> begin() {
+//         return QueueIterator(queue.data, queue.head, queue.length);
+//     }
+
+//     QueueIterator<T> end() {
+//         return QueueIterator(queue.data, queue.tail, queue.length);
+//     }
+// };
 
 QUEUE_TEMPLATE
 static inline
@@ -149,7 +196,6 @@ queue_free(Queue<T>* queue) {
     if (queue->allocator == Allocator_Temp) return;
 
     AllocatorFree(queue->allocator, queue->data);
-    AllocatorFree(queue->allocator, queue);
 }
 
 QUEUE_TEMPLATE
