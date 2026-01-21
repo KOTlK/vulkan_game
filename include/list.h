@@ -3,7 +3,7 @@
 #include "assert.h"
 #include "basic.h"
 #include "allocator.h"
-#include "memory.h"
+#include "mathematics.h"
 
 #define LIST_DEFAULT_LENGTH 256
 #define LIST_REALLOC_STEP 128
@@ -347,15 +347,6 @@ list_get_ptr(List<T> *list, u32 index) {
     Assert(list->data, "Cannot get data from uninitialized list, use list_make to initialize it.");
     Assert(index < list->count, "Index outside the bounds of the list");
     return &list->data[index];
-}
-
-LIST_TEMPLATE
-static inline
-void
-swap(T *a, T *b) {
-    T temp = *a;
-    *a = *b;
-    *b = temp;
 }
 
 LIST_TEMPLATE

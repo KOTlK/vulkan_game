@@ -1,3 +1,4 @@
+#include "SDL3/SDL_mouse.h"
 #include "glass.h"
 #include "list.h"
 #include "queue.h"
@@ -314,4 +315,19 @@ static inline GlassScancode sdl_scancode_to_glass(SDL_Scancode scancode) {
     }
 
     return GLASS_SCANCODE_UNASSIGNED;
+}
+
+void get_all_available_mices(InputDevice** mices, s32* m_count) {
+    auto m_mices = SDL_GetMice(m_count);
+
+    *mices = Calloc(InputDevice, *m_count);
+
+    for (s32 i = 0; i < *m_count; i++) {
+        InputDevice device{};
+
+        device.type     = MOUSE;
+        device.mouse_id = m_mices[i];
+
+        *mices[i] = device;
+    }
 }

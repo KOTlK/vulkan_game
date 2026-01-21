@@ -1,6 +1,7 @@
 #include "geometry.h"
 #include "types.h"
 #include <memory.h>
+#include <cstdlib>
 
 #define Malloc(type, size) (type*)malloc(size)
 #define Free(ptr) free(ptr)

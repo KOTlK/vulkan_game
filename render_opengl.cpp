@@ -68,7 +68,7 @@ static inline ShapeCache get_shape_cache(Shape2D* shape);
 
 static RenderContext Render_Context{};
 
-RenderError render_init(Context* ctx) {
+RenderError render_init(Game_Context* ctx) {
     list_make(&Render_Context.shaders);
     list_make(&Render_Context.materials);
     table_make(&Render_Context.shape_cache);
@@ -81,6 +81,7 @@ RenderError render_init(Context* ctx) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
     Render_Context.sdl_context  = SDL_GL_CreateContext(ctx->wnd->window);
     auto make_context = SDL_GL_MakeCurrent(ctx->wnd->window, Render_Context.sdl_context);
@@ -114,7 +115,10 @@ void render_destroy() {
 
 void clear_color_buffer(Vector4 color) {
     glClearColor(color.x, color.y, color.z, color.w);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glEnable(GL_CULL_FACE);
 }
 
 RenderError render_test() {
@@ -220,10 +224,10 @@ void render_set_active_camera(Camera* cam) {
 }
 
 void render_set_camera_matrices(Matrix4 v, Matrix4 p, Vector3 pos) {
-    Camera_Data.v      = v;
-    Camera_Data.p      = p;
-    Camera_Data.vp = p * v;
-    Camera_Data.position  = pos;
+    Camera_Data.v        = v;
+    Camera_Data.p        = p;
+    Camera_Data.vp       = p * v;
+    Camera_Data.position = pos;
 
     glBindBuffer(GL_UNIFORM_BUFFER, Camera_UBO);
     glBufferData(GL_UNIFORM_BUFFER, sizeof(CameraData), &Camera_Data, GL_DYNAMIC_DRAW);
@@ -232,8 +236,8 @@ void render_set_camera_matrices(Matrix4 v, Matrix4 p, Vector3 pos) {
 }
 
 void render_set_time(float dt, float time) {
-    Time_Data.dt   = dt;
-    Time_Data.time = time;
+    Time_Data.dt       = dt;
+    Time_Data.time     = time;
     Time_Data.sin_time = sin(time);
     Time_Data.cos_time = cos(time);
 
@@ -246,25 +250,12 @@ void render_set_time(float dt, float time) {
 RenderError render_shape_2d(Material* mat, Shape2D* shape, Transform* transform) {
     ShapeCache cache = get_shape_cache(shape);
 
-    Matrix4 model = matrix4_trs_2d(transform->position.x,
-                                   transform->position.y,
-                                   transform->rotation,
-                                   transform->scale.x,
-                                   transform->scale.y);
+    Matrix4 model = matrix4_trs(transform->position,
+                                transform->rotation,
+                                transform->scale);
 
-    // Matrix4 mvp   = matrix4_mvp(Active_Camera->position.x, 
-    //                             Active_Camera->position.y, 
-    //                             Active_Camera->left,
-    //                             Active_Camera->right,
-    //                             Active_Camera->top,
-    //                             Active_Camera->bottom,
-    //                             transform->position.x,
-    //                             transform->position.y,
-    //                             transform->rotation,
-    //                             transform->scale.x,
-    //                             transform->scale.y);
-
-    Matrix4 mvp = model * Camera_Data.vp;
+    // Matrix4 mvp = model * Camera_Data.vp;
+    Matrix4 mvp = Camera_Data.vp * model;
 
     use_shader(mat->shader);
 
@@ -325,7 +316,7 @@ static inline ShapeCache get_shape_cache(Shape2D* shape) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebobo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(u16) * shape->index_count, shape->indices, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(Vertex), (void*)offsetof(Vertex, color));
     glEnableVertexAttribArray(1);

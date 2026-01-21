@@ -11,6 +11,7 @@ enum ScreenMode {
 struct Window;
 struct Surface;
 struct Application;
+union  InputDevice;
 
 struct ScreenParams {
     u32 width;
@@ -19,6 +20,12 @@ struct ScreenParams {
     u32 y;
     u32 refresh_rate;
     ScreenMode screen_mode;
+};
+
+enum InputDeviceType {
+    UNINITIALIZED = 0,
+    KEYBOARD      = 1,
+    MOUSE         = 2,
 };
 
 enum GlassErrorCode {
@@ -184,3 +191,5 @@ extern const char**   glass_get_vulkan_instance_extensions(u32* count);
 
 // input
 extern bool glass_is_button_pressed(Window* win, GlassScancode scancode);
+
+extern u32 get_all_available_mices(InputDevice** mices);

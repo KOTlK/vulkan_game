@@ -9,7 +9,7 @@ struct Time {
     float   dt;
 };
 
-struct Context {
+struct Game_Context {
     Window* wnd;
     Time    time;
 };

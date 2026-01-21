@@ -14,20 +14,24 @@ struct Shader;
 struct Material;
 
 struct Camera {
-    Vector3 position;
-    float   rotation;
-    float   size;
-    float   aspect;
-    float   left;
-    float   right;
-    float   top;
-    float   bottom;
+    Vector3    position;
+    Quaternion rotation;
+    float      aspect;
+    float      near_plane;
+    float      far_plane;
+    float      fov;
+    float      size;
+    float      left;
+    float      right;
+    float      top;
+    float      bottom;
 };
 
 struct Transform {
-    Vector3 position;
-    Vector3 scale;
-    float   rotation;
+    Vector3    position;
+    Quaternion rotation;
+    Vector3    scale;
+    // float   rotation;
 };
 
 struct Renderer2D {
@@ -36,13 +40,13 @@ struct Renderer2D {
 };
 
 enum RenderError {
-    RENDER_OK                       = 0,
-    RENDER_INTERNAL_ERROR           = 1,
-    RENDER_NO_GPU_FOUND             = 2,
-    RENDER_INCOMPATIBLE_SHADER_DATA = 3,
+     RENDER_OK                       = 0,
+     RENDER_INTERNAL_ERROR           = 1,
+     RENDER_NO_GPU_FOUND             = 2,
+     RENDER_INCOMPATIBLE_SHADER_DATA = 3,
 };
 
-RenderError render_init(Context* context);
+RenderError render_init(Game_Context* context);
 void        render_destroy();
 RenderError render_test();
 
@@ -69,3 +73,15 @@ extern void camera_make_ortho(Vector3 position, float rotation, float size, floa
 extern void camera_update_position(Camera* cam, Vector3 position);
 extern void camera_update_size(Camera* cam, float size);
 extern void camera_update_ortho(Camera* cam);
+
+void camera_make_perspective(const Vector3& p, 
+                               const Quaternion& r, 
+                               float aspect,
+                               float fov,
+                               float near_plane,
+                               float far_plane,
+                               Camera* cam);
+
+void camera_perspective_update_position(Camera* cam, const Vector3& p);
+void camera_perspective_update_rotation(Camera* cam, const Quaternion& r);
+void camera_perspective_set_fov(Camera* cam, float fov);

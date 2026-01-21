@@ -19,7 +19,6 @@
 #include "game_context.h"
 #include "array.h"
 #include "mathematics.h"
-#include "vector_utils.h"
 #include "components.h"
 #include "component_system.h"
 #include "list.h"
@@ -28,11 +27,12 @@
 #include "text.h"
 #include "file.h"
 #include "bitmap.h"
+#include "context.h"
 
 #define WIDTH  1280
 #define HEIGHT 720
 
-Context Game_Context{};
+Game_Context G_Context{};
 
 Matrix4 VIEW;
 Matrix4 PROJECTION;
@@ -45,9 +45,12 @@ static Shape2D   Shape;
 
 static Transform Test_Transform = {
     .position = {{0, 0, 0}},
+    .rotation = quaternion_identity,
     .scale    = {{1, 1, 1}},
-    .rotation = radians(0.0f)
 };
+
+static Vector3 Camera_Rotation = vector3_make(0, radians(0.0f), 0);
+static Vector3 Transform_Rotation = vector3_make(0, 0, 0);
 
 static u64 Target_Fps = 75;
 
@@ -75,7 +78,7 @@ int main(int argc, char** argv) {
 
     GlassErrorCode err = GLASS_OK;
 
-    Game_Context.wnd = glass_create_window(400, 100, WIDTH, HEIGHT, name, &err);
+    G_Context.wnd = glass_create_window(400, 100, WIDTH, HEIGHT, name, &err);
 
     if (err != GLASS_OK) {
         Errf("Cannot create window. %d", err);
@@ -86,9 +89,10 @@ int main(int argc, char** argv) {
 
     float aspect_ratio = (float)WIDTH / (float)HEIGHT;
 
-    camera_make_ortho(vector3_make(0,0,0), 0, 10, aspect_ratio, &Cam);
+    // camera_make_ortho(vector3_make(0,0,0), 0, 10, aspect_ratio, &Cam);
+    camera_make_perspective(vector3_make(0, 0, -5.0f), quaternion_euler(Camera_Rotation), aspect_ratio, radians(60.0f), 0.1f, 20000.0f, &Cam);
 
-    RenderError render_err = render_init(&Game_Context);
+    RenderError render_err = render_init(&G_Context);
 
     if (render_err != RENDER_OK) {
         Errf("Render init error. %d.", render_err);
@@ -137,17 +141,63 @@ int main(int argc, char** argv) {
     // u16 indices[] = {
     //     0, 1, 2,
     // };  
+    // Vertex vertices[] = {
+    //     {{{   0.5f,  -0.5f, 0.0f }}, { 255, 0,   0,   255 }},
+    //     {{{   0.5f,   0.5f, 0.0f }}, { 0,   255, 0,   255 }},
+    //     {{{  -0.5f,   0.5f, 0.0f }}, { 0,   0,   255, 255 }},
+    //     {{{  -0.5f,  -0.5f, 0.0f }}, { 255, 255, 0, 255 }},
+    // };
+
+    // u16 indices[] = {
+    //     0, 1, 2,
+    //     0, 2, 3
+    // };  
+
     Vertex vertices[] = {
-        {{{   0.5f,  -0.5f, 0.0f }}, { 255, 0,   0,   255 }},
-        {{{   0.5f,   0.5f, 0.0f }}, { 0,   255, 0,   255 }},
-        {{{  -0.5f,   0.5f, 0.0f }}, { 0,   0,   255, 255 }},
-        {{{  -0.5f,  -0.5f, 0.0f }}, { 255, 255, 0, 255 }},
+        {{{-0.5f, -0.5f, -0.5f}}, {255, 0, 0, 255}},
+        {{{ 0.5f, -0.5f, -0.5f}}, {0, 255, 0, 255}},
+        {{{ 0.5f,  0.5f, -0.5f}}, {0, 0, 255, 255}},
+        {{{-0.5f,  0.5f, -0.5f}}, {255, 255, 0, 255}},
+        {{{-0.5f, -0.5f,  0.5f}}, {255, 0, 0, 255}},
+        {{{ 0.5f, -0.5f,  0.5f}}, {0, 255, 0, 255}},
+        {{{ 0.5f,  0.5f,  0.5f}}, {0, 0, 255, 255}},
+        {{{-0.5f,  0.5f,  0.5f}}, {255, 255, 0, 255}},
     };
 
     u16 indices[] = {
-        0, 1, 2,
-        0, 2, 3
-    };  
+        0, 1, 3, 3, 1, 2,
+        1, 5, 2, 2, 5, 6,
+        5, 4, 6, 6, 4, 7,
+        4, 0, 7, 7, 0, 3,
+        3, 2, 7, 7, 2, 6,
+        4, 5, 0, 0, 5, 1
+    };
+
+    // Vertex vertices[] = {
+    //     {{{ 0.5f,  -0.5f, 0.5f  }}, { 255, 0,   0,   255 }},
+    //     {{{ 0.5f,  0.5f,  0.5f  }}, { 0,   255, 0,   255 }},
+    //     {{{ -0.5f, 0.5f,  0.5f  }}, { 0,   0,   255, 255 }},
+    //     {{{ -0.5f, -0.5f, 0.5f  }}, { 255, 255, 0,   255 }},
+    //     {{{ 0.5f,  -0.5f, -0.5f }}, { 255, 0,   0,   255 }},
+    //     {{{ 0.5f,  0.5f,  -0.5f }}, { 0,   255, 0,   255 }},
+    //     {{{ -0.5f, 0.5f,  -0.5f }}, { 0,   0,   255, 255 }},
+    //     {{{ -0.5f, -0.5f, -0.5f }}, { 255, 255, 0,   255 }},
+    // };
+
+    // u16 indices[] = {
+    //     0, 1, 2,
+    //     0, 2, 3,
+    //     4, 5, 6,
+    //     4, 6, 7,
+    //     4, 5, 1,
+    //     4, 1, 0,
+    //     3, 2, 6,
+    //     3, 6, 7,
+    //     4, 0, 3,
+    //     4, 3, 7,
+    //     6, 2, 1,
+    //     6, 1, 5
+    // };  
 
     shape2d_make(vertices, indices, sizeof(vertices) / sizeof(Vertex), sizeof(indices) / sizeof(u16), &Shape);
 
@@ -189,15 +239,15 @@ int main(int argc, char** argv) {
                                         mem_diff / 1024.0 / 1024.0);
 #endif
         free_temp_allocator();
-        if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_ESCAPE)) {
+        if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_ESCAPE)) {
             glass_exit();
             break;
         }
 
-        if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_UP)) {
+        if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_UP)) {
             Target_Fps += 1;
             Target_Fps = clamp(Target_Fps, 1ull, max_fps);
-        } else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_DOWN)) {
+        } else if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_DOWN)) {
             Target_Fps -= 1;
             Target_Fps = clamp(Target_Fps, 1ull, max_fps);
         }
@@ -209,11 +259,14 @@ int main(int argc, char** argv) {
             break;
         }
 
-        Matrix4 view = matrix4_camera_view_2d(Cam.position);
-        Matrix4 proj = matrix4_ortho_2d(Cam.left, Cam.right, Cam.top, Cam.bottom);
+        // Matrix4 view = matrix4_camera_view_2d(Cam.position);
+        // Matrix4 proj = matrix4_ortho_2d(Cam.left, Cam.right, Cam.top, Cam.bottom);
+
+        Matrix4 view = matrix4_view(Cam.position, Cam.rotation);
+        Matrix4 proj = matrix4_perspective(Cam.fov, Cam.aspect, Cam.near_plane, Cam.far_plane);
 
         render_set_camera_matrices(view, proj, Cam.position);
-        render_set_time(Game_Context.time.dt, Game_Context.time.time);
+        render_set_time(G_Context.time.dt, G_Context.time.time);
 
         glass_main_loop();
 
@@ -236,17 +289,17 @@ int main(int argc, char** argv) {
             last_time = current_time;
         }
 
-        Game_Context.time.dt_double    = dt;
-        Game_Context.time.dt           = (float)dt;
-        Game_Context.time.time_double += dt;
-        Game_Context.time.time         = (float)Game_Context.time.time_double;
+        G_Context.time.dt_double    = dt;
+        G_Context.time.dt           = (float)dt;
+        G_Context.time.time_double += dt;
+        G_Context.time.time         = (float)G_Context.time.time_double;
 
         u64 fps = (u64)(1.0l / dt);
 
         char buf[1024];
 
-        sprintf(buf, "fps: %llu, dt:%f, time:%f\n", fps, Game_Context.time.dt, Game_Context.time.time);
-        glass_set_window_title(Game_Context.wnd, buf);
+        sprintf(buf, "fps: %llu, dt:%f, time:%f\n", fps, G_Context.time.dt, G_Context.time.time);
+        glass_set_window_title(G_Context.wnd, buf);
     }
 
     return 0;
@@ -298,7 +351,7 @@ GlassErrorCode glass_on_move(u32 x, u32 y) {
 Queue<EntityHandle> Entities = queue_make<EntityHandle>();
 
 void glass_game_code() {
-    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_ALPHA1)) {
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_ALPHA1)) {
         Target_Fps = 1;
     }
 
@@ -311,96 +364,129 @@ void glass_game_code() {
     Vector3 direction = {};
     Vector3 cam_direction = {};
 
-    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_W)) {
-        direction.y = 1.0f;
-    } else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_S)) {
-        direction.y = -1.0f;
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_W)) {
+        if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_LEFT_CONTROL)) {
+            direction.z = 1.0f;
+        } else {
+            direction.y = 1.0f;
+        }
+    } else if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_S)) {
+        if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_LEFT_CONTROL)) {
+            direction.z = -1.0f;
+        } else {
+            direction.y = -1.0f;
+        }
     }
 
-    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_D)) {
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_D)) {
         direction.x = 1.0f;
-    }else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_A)) {
+    }else if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_A)) {
         direction.x = -1.0f;
     }
 
-    Test_Transform.position += direction * (Game_Context.time.dt * speed);
+    Test_Transform.position += direction * (G_Context.time.dt * speed);
 
-    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_Q)) {
-        Test_Transform.rotation += angular_speed * Game_Context.time.dt;
-    } else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_E)) {
-        Test_Transform.rotation -= angular_speed * Game_Context.time.dt;
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_B)) {
+        if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_LEFT_CONTROL)) 
+            Transform_Rotation.x += angular_speed * G_Context.time.dt;
+        else
+            Camera_Rotation.x += angular_speed * G_Context.time.dt;
+    }
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_N)) {
+        if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_LEFT_CONTROL)) 
+            Transform_Rotation.y += angular_speed * G_Context.time.dt;
+        else 
+            Camera_Rotation.y += angular_speed * G_Context.time.dt;
+    }
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_M)) {
+        if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_LEFT_CONTROL))
+            Transform_Rotation.z += angular_speed * G_Context.time.dt;
+        else
+            Camera_Rotation.z += angular_speed * G_Context.time.dt;
     }
 
-    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_I)) {
-        cam_direction.y = 1.0f;
-    } else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_K)) {
-        cam_direction.y = -1.0f;
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_I)) {
+        if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_LEFT_CONTROL)) {
+            cam_direction.z = 1.0f;
+        } else {
+            cam_direction.y = 1.0f;
+        }
+    } else if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_K)) {
+        if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_LEFT_CONTROL)) {
+            cam_direction.z = -1.0f;
+        } else {
+            cam_direction.y = -1.0f;
+        }
     }
 
-    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_L)) {
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_L)) {
         cam_direction.x = 1.0f;
-    }else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_J)) {
+    }else if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_J)) {
         cam_direction.x = -1.0f;
     }
 
     float zoom = zoom_speed;
 
-    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_LEFT_SHIFT)) {
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_LEFT_SHIFT)) {
         zoom *= zoom_mult;
     }
 
-    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_U)) {
-        Cam.size -= zoom * Game_Context.time.dt;
-    } else if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_O)) {
-        Cam.size += zoom * Game_Context.time.dt;
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_U)) {
+        Cam.size -= zoom * G_Context.time.dt;
+    } else if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_O)) {
+        Cam.size += zoom * G_Context.time.dt;
     }
 
     Cam.size = clamp(Cam.size, 0.01f, 100.0f);
 
-    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_R)) {
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_R)) {
         Cam.size = 5.0f;
     }
 
     // Vector3 cam_pos = Cam.position;
 
-    Cam.position += cam_direction * (cam_speed * Game_Context.time.dt);
+    Cam.position += cam_direction * (cam_speed * G_Context.time.dt);
+    Cam.rotation = quaternion_euler(Camera_Rotation);
+    // camera_update_ortho(&Cam);
+    camera_perspective_update_position(&Cam, Cam.position);
+    camera_perspective_update_rotation(&Cam, Cam.rotation);
 
-    camera_update_ortho(&Cam);
+    Test_Transform.rotation = quaternion_euler(Transform_Rotation);
     // Logf("Cam position: %f, %f, %f, rotation: %f", Cam.position.x, Cam.position.y, Cam.position.z, Cam.rotation);
 
     const Vector3 min_pos = Vector3 {
         .x = -30.0f,
         .y = -30.0f,
-        .z = 0
+        .z = -30.0f
     };
 
     const Vector3 max_pos = Vector3 {
         .x = 30.0f,
         .y = 30.0f,
-        .z = 0
+        .z = 30.0f
     };
 
     const Vector3 min_scale = Vector3 {
-        .x = -2.0f,
-        .y = -2.0f,
-        .z = 1
+        .x = 0.2f,
+        .y = 0.2f,
+        .z = 0.2f
     };
 
     const Vector3 max_scale = Vector3 {
-        .x = 2.0f,
-        .y = 2.0f,
-        .z = 1
+        .x = 5.0f,
+        .y = 5.0f,
+        .z = 5.0f
     };
 
     EntityManager* e = &em;
 
-    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_SPACE)) {
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_SPACE)) {
         EntityHandle ent = entity_create(&em);
 
         Transform trans = {
             .position = vector3_random(min_pos, max_pos),
+            .rotation = quaternion_angle_axis(radians(frand(-180.0f, 180.0f)), vector3_forward),
             .scale    = vector3_random(min_scale, max_scale),
-            .rotation = radians(frand(-180.0f, 180.0f)),
         };
 
         TestComponent test = {
@@ -425,7 +511,7 @@ void glass_game_code() {
         queue_enqueue(&Entities, ent);
     }
 
-    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_T)) {
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_T)) {
         if (Entities.count > 0) {
             EntityHandle ent = queue_dequeue(&Entities);
             entity_destroy(e, ent);
@@ -433,7 +519,7 @@ void glass_game_code() {
         }
     }
 
-    if (glass_is_button_pressed(Game_Context.wnd, GLASS_SCANCODE_Z)) {
+    if (glass_is_button_pressed(G_Context.wnd, GLASS_SCANCODE_Z)) {
         if (Entities.count > 0) {
             for(auto ent : Entities) {
                 if (HAS_COMPONENT(TestComponent2, e, ent.id)) {
