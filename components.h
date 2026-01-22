@@ -1,8 +1,9 @@
 #pragma once
 
-#include "bitmap.h"
 #include "types.h"
 #include "render.h"
+
+import bitmap;
 
 struct ComponentTable;
 

@@ -1,16 +1,22 @@
-#pragma once
+module;
 
 #include "assert.h"
 #include "basic.h"
 #include "allocator.h"
-#include "mathematics.h"
+
+import math;
+
+export module list;
+// #pragma once
+
+// import "assert.h"
 
 #define LIST_DEFAULT_LENGTH 256
 #define LIST_REALLOC_STEP 128
 
 #define LIST_TEMPLATE template <typename T>
 
-LIST_TEMPLATE
+export LIST_TEMPLATE
 struct List {
     T*         data;
     u32        count;
@@ -53,117 +59,11 @@ struct List {
     ~List() = default;
 };
 
+export
 LIST_TEMPLATE
-static inline
+inline
 void
-list_make(List<T>* list, u32 length = LIST_DEFAULT_LENGTH, Allocator* allocator = Allocator_Persistent);
-
-LIST_TEMPLATE
-static inline
-List<T>
-list_make(u32 length = LIST_DEFAULT_LENGTH, Allocator* allocator = Allocator_Persistent);
-
-LIST_TEMPLATE
-static inline
-void
-list_realloc(List<T> *list, u32 length);
-
-LIST_TEMPLATE
-static inline
-void
-list_free(List<T> *list);
-
-LIST_TEMPLATE
-static inline
-u32
-list_append(List<T> *list, T element);
-
-LIST_TEMPLATE
-static inline
-T*
-list_append_empty(List<T> *list, u32* ret_index = NULL);
-
-LIST_TEMPLATE
-static inline
-void
-list_remove(List<T> *list, T element);
-
-LIST_TEMPLATE
-static inline
-void
-list_remove_swap_back(List<T> *list, T element);
-
-LIST_TEMPLATE
-static inline
-void
-list_remove_at(List<T> *list, u32 index);
-
-LIST_TEMPLATE
-static inline
-void
-list_remove_at_swap_back(List<T> *list, u32 index);
-
-LIST_TEMPLATE
-static inline
-void
-list_set(List<T> *list, u32 index, T element);
-
-LIST_TEMPLATE
-static inline
-T
-list_get(List<T> *list, u32 index);
-
-LIST_TEMPLATE
-static inline
-T*
-list_get_ptr(List<T> *list, u32 index);
-
-LIST_TEMPLATE
-static inline
-void
-list_quick_sort(List<T> *list);
-
-LIST_TEMPLATE
-static inline
-void
-list_flush(List<T> *list);
-
-LIST_TEMPLATE
-static inline
-bool
-list_contains(List<T> *list, T elem);
-
-template <typename T, typename Predicate>
-static inline
-bool
-list_contains(List<T> *list, Predicate descr, u32* index);
-
-LIST_TEMPLATE
-static inline
-bool
-list_find(List<T> *list, T elem, u32* index);
-
-template <typename T, typename Predicate>
-static inline
-bool
-list_find_by_descr(List<T> *list, Predicate descr, T* elem);
-
-LIST_TEMPLATE
-static inline
-void
-list_clear(List<T> *list);
-
-// get the index of item, the pointer points to
-LIST_TEMPLATE
-static inline
-u32
-list_index_of_ptr(List<T>* list, T* elem);
-
-// Implementation
-LIST_TEMPLATE
-static inline
-void
-list_make(List<T>* list, u32 length, Allocator* allocator) {
+list_make(List<T>* list, u32 length = LIST_DEFAULT_LENGTH, Allocator* allocator = Allocator_Persistent) {
     auto data = AllocatorAlloc(T, allocator, sizeof(T) * length);
     Assert(data, "Cannot allocate list data.");
 
@@ -173,10 +73,11 @@ list_make(List<T>* list, u32 length, Allocator* allocator) {
     list->allocator = allocator;
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 List<T>
-list_make(u32 length, Allocator* allocator) {
+list_make(u32 length = LIST_DEFAULT_LENGTH, Allocator* allocator = Allocator_Persistent) {
     List<T> list{};
 
     auto data = AllocatorAlloc(T, allocator, sizeof(T) * length);
@@ -190,8 +91,9 @@ list_make(u32 length, Allocator* allocator) {
     return list;
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 void
 list_realloc(List<T> *list, u32 length) {
     Assert(list->data, "Cannot realloc uninitialized list, use list_make to initialize it.");
@@ -214,8 +116,9 @@ list_realloc(List<T> *list, u32 length) {
     list->length = length;
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 void
 list_free(List<T> *list) {
     Assert(list->data, "Cannot free uninitialized list, use list_make to initialize it.");
@@ -225,8 +128,9 @@ list_free(List<T> *list) {
     AllocatorFree(list->allocator, list->data);
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 u32
 list_append(List<T> *list, T element) {
     Assert(list->data, "Cannot append to uninitialized list, use list_make to initialize it.");
@@ -243,10 +147,11 @@ list_append(List<T> *list, T element) {
     return index;
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 T*
-list_append_empty(List<T> *list, u32* ret_index) {
+list_append_empty(List<T> *list, u32* ret_index = NULL) {
     Assert(list->data, "Cannot append to uninitialized list, use list_make to initialize it.");
 
     if (list->count >= list->length) {
@@ -266,8 +171,9 @@ list_append_empty(List<T> *list, u32* ret_index) {
     return &list->data[index];
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 void
 list_remove(List<T> *list, T element) {
     Assert(list->data, "Cannot remove from uninitialized list, use list_make to initialize it.");
@@ -285,8 +191,9 @@ list_remove(List<T> *list, T element) {
     }
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 void
 list_remove_swap_back(List<T> *list, T element) {
     Assert(list->data, "Cannot remove from uninitialized list, use list_make to initialize it.");
@@ -299,8 +206,9 @@ list_remove_swap_back(List<T> *list, T element) {
     }
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 void
 list_remove_at(List<T> *list, u32 index) {
     Assert(list->data, "Cannot remove from uninitialized list, use list_make to initialize it.");
@@ -312,8 +220,9 @@ list_remove_at(List<T> *list, u32 index) {
     }
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 void
 list_remove_at_swap_back(List<T> *list, u32 index) {
     Assert(list->data, "Cannot remove from uninitialized list, use list_make to initialize it.");
@@ -322,8 +231,9 @@ list_remove_at_swap_back(List<T> *list, u32 index) {
     list->data[index] = list->data[--list->count];
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 void
 list_set(List<T> *list, u32 index, T element) {
     Assert(list->data, "Cannot set data in uninitialized list, use list_make to initialize it.");
@@ -331,8 +241,9 @@ list_set(List<T> *list, u32 index, T element) {
     list->data[index] = element;
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 T
 list_get(List<T> *list, u32 index) {
     Assert(list->data, "Cannot get data from uninitialized list, use list_make to initialize it.");
@@ -340,8 +251,9 @@ list_get(List<T> *list, u32 index) {
     return list->data[index];
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 T*
 list_get_ptr(List<T> *list, u32 index) {
     Assert(list->data, "Cannot get data from uninitialized list, use list_make to initialize it.");
@@ -349,8 +261,9 @@ list_get_ptr(List<T> *list, u32 index) {
     return &list->data[index];
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 void
 quick_sort(T *arr, u32 low, u32 high) {
     if (low < high) {
@@ -372,24 +285,27 @@ quick_sort(T *arr, u32 low, u32 high) {
     }
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 void
 list_quick_sort(List<T> *list) {
     Assert(list->data, "Cannot sort uninitialized list, use list_make to initialize it.");
     quick_sort(list->data, 0, list->count);
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 void
 list_flush(List<T> *list) {
     Assert(list->data, "Cannot flush uninitialized list, use list_make to initialize it.");
     list->count = 0;
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 bool
 list_contains(List<T> *list, T elem) {
     Assert(list->data, "Cannot search in uninitialized list, use list_make to initialize it.");
@@ -399,8 +315,9 @@ list_contains(List<T> *list, T elem) {
     return false;
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 bool
 list_find(List<T> *list, T elem, u32* index) {
     Assert(list->data, "Cannot search in uninitialized list, use list_make to initialize it.");
@@ -415,8 +332,9 @@ list_find(List<T> *list, T elem, u32* index) {
 
 // Predicate should match signature:
 // bool (*name)(T)
+export
 template <typename T, typename Predicate>
-static inline
+inline
 bool
 list_find_by_descr(List<T> *list, Predicate descr, T* elem) {
     for (u32 i = 0; i < list->count; i++) {
@@ -430,8 +348,9 @@ list_find_by_descr(List<T> *list, Predicate descr, T* elem) {
 
 // Predicate should match signature:
 // bool (*name)(T)
+export
 template <typename T, typename Predicate>
-static inline
+inline
 bool
 list_contains(List<T> *list, Predicate descr, u32* index) {
     Assert(list->data, "Cannot search in uninitialized list, use list_make to initialize it.");
@@ -444,8 +363,9 @@ list_contains(List<T> *list, Predicate descr, u32* index) {
     return false;
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 void
 list_clear(List<T> *list) {
     Assert(list->data, "Cannot clear uninitialized list, use list_make to initialize it.");
@@ -454,8 +374,9 @@ list_clear(List<T> *list) {
     memset(list->data, 0, sizeof(T) * list->length);
 }
 
+export
 LIST_TEMPLATE
-static inline
+inline
 u32
 list_index_of_ptr(List<T>* list, T* elem) {
     Assert(list->data, "Cannot get index of pointer inside uninitialized list, use list_make to initialize it.");

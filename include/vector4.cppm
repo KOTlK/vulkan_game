@@ -1,6 +1,6 @@
-#pragma once
+export module vector4;
 
-union Vector4 {
+export union Vector4 {
     struct {float x, y, z, w;};
     struct {float r, g, b, a;};
     float e[4];

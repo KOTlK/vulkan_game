@@ -1,11 +1,12 @@
 #pragma once
 
 #include "basic.h"
-#include "text.h"
 #include "debug.h"
 #include "assert.h"
 #include <stdio.h>
 #include <filesystem>
+
+import text;
 
 static inline bool   read_entire_file(const char* path, Allocator* allocator, String* str);
 static inline bool   file_exists(const char* path);

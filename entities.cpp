@@ -3,10 +3,11 @@
 #include "component_system.h"
 #include "assert.h"
 #include "memory.h"
-#include "bitmap.h"
 #include "component_system.h"
 #include "components.h"
-#include "mathematics.h"
+
+import math;
+import bitmap;
 
 #define START_ENTITY_LENGTH 1024
 #define REALLOC_STEP 256

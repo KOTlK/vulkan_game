@@ -1,4 +1,4 @@
-#pragma once
+module;
 
 #include "assert.h"
 #include "basic.h"
@@ -7,11 +7,13 @@
 #include "hash_functions.h"
 #include "debug.h"
 
+export module hash_table;
+
 #define HASH_TABLE_INITIAL_LENGTH  256
 #define HASH_TABLE_REALLOC_STEP    128
 #define HASH_TABLE_MAX_LOAD_FACTOR 70
 
-#define HASH_TABLE_TEMPLATE template <typename Key, typename Value>
+#define HASH_TABLE_TEMPLATE export template <typename Key, typename Value>
 
 HASH_TABLE_TEMPLATE
 struct HashTableSlot {
@@ -118,149 +120,21 @@ struct HashTable {
     }
 };
 
-// Iterator
-// HASH_TABLE_TEMPLATE
-// struct HashTableIterator {
-//     HashTableSlot<Key, Value>* slots;
-//     u32                        current;
-//     u32                        length;
-
-//     HashTableIterator(HashTableSlot<Key, Value>* s, u32 start, u32 len)
-//         : slots(s), current(start), length(len) {
-//         advance_to_valid();
-//     }
-
-//     void advance_to_valid() {
-//         while (current < length && 
-//                (slots[current].hash == 0 || slots[current].tombstone)) {
-//             ++current;
-//         }
-//     }
-
-//     HashTableIterator& operator++() {
-//         ++current;
-//         advance_to_valid();
-//         return *this;
-//     }
-
-//     bool operator!=(const HashTableIterator& other) const {
-//         return current != other.current;
-//     }
-
-//     struct Entry {
-//         Key&   key;
-//         Value& value;
-//     };
-
-//     Entry operator*() const {
-//         return { slots[current].key, slots[current].value };
-//     }
-// };
-
-// HASH_TABLE_TEMPLATE
-// struct HashTableRange {
-//     HashTable<Key, Value>* table;
-
-//     HashTableIterator<Key, Value> begin() {
-//         return HashTableIterator<Key, Value>(table->data, 0, table->length);
-//     }
-
-//     HashTableIterator<Key, Value> end() {
-//         return HashTableIterator<Key, Value>(table->data, table->length, table->length);
-//     }
-// };
-
-// HASH_TABLE_TEMPLATE
-// static inline
-// HashTableRange<Key, Value> iterate(HashTable<Key, Value>* table) {
-//     return { table };
-// }
-
-HASH_TABLE_TEMPLATE
-static inline
-void
-table_make(HashTable<Key, Value>* hash_table, Allocator* allocator = Allocator_Persistent, u32 length = HASH_TABLE_INITIAL_LENGTH);
-
-HASH_TABLE_TEMPLATE
-static inline
-HashTable<Key, Value>
-table_make(Allocator* allocator = Allocator_Persistent, u32 length = HASH_TABLE_INITIAL_LENGTH);
-
-HASH_TABLE_TEMPLATE
-static inline
-void
-table_realloc(HashTable<Key, Value>* hash_table, u32 length);
-
-HASH_TABLE_TEMPLATE
-static inline
-void
-table_free(HashTable<Key, Value>* hash_table);
-
-HASH_TABLE_TEMPLATE
-static inline
-void
-table_add(HashTable<Key, Value>* hash_table, Key key, Value value);
-
-HASH_TABLE_TEMPLATE
-static inline
-void
-table_set(HashTable<Key, Value>* hash_table, Key key, Value value);
-
-HASH_TABLE_TEMPLATE
-static inline
-bool
-table_add_or_set(HashTable<Key, Value>* hash_table, Key key, Value value); // Adds or sets element. If element with the same key already been added, returns true, otherwise return false.
-
-HASH_TABLE_TEMPLATE
-static inline
-void
-table_remove(HashTable<Key, Value>* hash_table, Key key);
-
-HASH_TABLE_TEMPLATE
-static inline
-bool
-table_remove_if_contains(HashTable<Key, Value>* hash_table, Key key); // Removes element from hash table if it exist. Returns true if element was removed, false if not.
-
-HASH_TABLE_TEMPLATE
-static inline
-bool
-table_contains(HashTable<Key, Value>* hash_table, Key key);
-
-HASH_TABLE_TEMPLATE
-static inline
-Value
-table_get(HashTable<Key, Value>* hash_table, Key key);
-
-HASH_TABLE_TEMPLATE
-static inline
-Value*
-table_get_ptr(HashTable<Key, Value>* hash_table, Key key);
-
-HASH_TABLE_TEMPLATE
-static inline
-bool
-table_try_get(HashTable<Key, Value>* hash_table, Key key, Value* value);
-
-HASH_TABLE_TEMPLATE
-static inline
-bool
-table_try_get_ptr(HashTable<Key, Value>* hash_table, Key key, Value** value);
-
-template <typename Key, typename Value, typename Iterator>
-static inline
-void
-table_iterate(HashTable<Key, Value>* hash_table, Iterator iterator_func);
-
-static inline
+inline
 u64
 table_double_hash(u64 hash, u32 length, u32 iteration = 0);
 
+inline
+u64
+table_double_hash(u64 hash, u32 length, u32 iteration) {
+    u64 secondary = 1 + (hash % (length - 1));
+    return (hash + iteration * secondary) % length;
+}
 
-// Implementation
 HASH_TABLE_TEMPLATE
-static inline
+inline
 void
-table_make(HashTable<Key, Value>* hash_table, Allocator* allocator, u32 length) {
+table_make(HashTable<Key, Value>* hash_table, Allocator* allocator = Allocator_Persistent, u32 length = HASH_TABLE_INITIAL_LENGTH) {
     auto data = (HashTableSlot<Key, Value>*)allocator->alloc(sizeof(HashTableSlot<Key, Value>) * length);
     Assert(data, "Cannot allocate memory for hash_table data.");
 
@@ -273,9 +147,9 @@ table_make(HashTable<Key, Value>* hash_table, Allocator* allocator, u32 length) 
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 HashTable<Key, Value>
-table_make(Allocator* allocator, u32 length) {
+table_make(Allocator* allocator = Allocator_Persistent, u32 length = HASH_TABLE_INITIAL_LENGTH) {
     HashTable<Key, Value> table{};
 
     auto data = (HashTableSlot<Key, Value>*)allocator->alloc(sizeof(HashTableSlot<Key, Value>) * length);
@@ -292,7 +166,7 @@ table_make(Allocator* allocator, u32 length) {
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 void
 table_realloc(HashTable<Key, Value>* hash_table, u32 length) {
     Assert(hash_table->data, "Cannot realloc uninitalized hash table, use table_make to initialize it");
@@ -331,7 +205,7 @@ table_realloc(HashTable<Key, Value>* hash_table, u32 length) {
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 void
 table_free(HashTable<Key, Value>* hash_table) {
     Assert(hash_table->data, "Cannot free uninitialized hash table, use table_make to initialize it");
@@ -342,7 +216,7 @@ table_free(HashTable<Key, Value>* hash_table) {
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 void
 table_add(HashTable<Key, Value>* hash_table, Key key, Value value) {
     Assert(hash_table->data, "Cannot add to uninitalized hash table, use table_make to initialize it");
@@ -378,7 +252,7 @@ table_add(HashTable<Key, Value>* hash_table, Key key, Value value) {
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 void
 table_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
     Assert(hash_table->data, "Cannot set uninitialized hash table data, use table_make to initialize it");
@@ -406,7 +280,7 @@ table_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 bool
 table_add_or_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
     Assert(hash_table->data, "Cannot add to uninitalized hash table, use table_make to initialize it");
@@ -447,7 +321,7 @@ table_add_or_set(HashTable<Key, Value>* hash_table, Key key, Value value) {
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 void
 table_remove(HashTable<Key, Value>* hash_table, Key key) {
     Assert(hash_table->data, "Cannot remove from uninitalized hash table, use table_make to initialize it");
@@ -474,7 +348,7 @@ table_remove(HashTable<Key, Value>* hash_table, Key key) {
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 bool
 table_remove_if_contains(HashTable<Key, Value>* hash_table, Key key) {
     Assert(hash_table->data, "Cannot remove from uninitalized hash table, use table_make to initialize it");
@@ -503,7 +377,7 @@ table_remove_if_contains(HashTable<Key, Value>* hash_table, Key key) {
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 bool
 table_contains(HashTable<Key, Value>* hash_table, Key key) {
     Assert(hash_table->data, "Cannot search in uninitalized hash table, use table_make to initialize it");
@@ -521,7 +395,7 @@ table_contains(HashTable<Key, Value>* hash_table, Key key) {
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 Value
 table_get(HashTable<Key, Value>* hash_table, Key key) {
     Assert(hash_table->data, "Cannot get value from uninitalized hash table, use table_make to initialize it");
@@ -540,7 +414,7 @@ table_get(HashTable<Key, Value>* hash_table, Key key) {
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 Value*
 table_get_ptr(HashTable<Key, Value>* hash_table, Key key) {
     Assert(hash_table->data, "Cannot get value from uninitalized hash table, use table_make to initialize it");
@@ -559,7 +433,7 @@ table_get_ptr(HashTable<Key, Value>* hash_table, Key key) {
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 bool
 table_try_get(HashTable<Key, Value>* hash_table, Key key, Value* value) {
     Assert(hash_table->data, "Cannot get value from uninitalized hash table, use table_make to initialize it");
@@ -584,7 +458,7 @@ table_try_get(HashTable<Key, Value>* hash_table, Key key, Value* value) {
 }
 
 HASH_TABLE_TEMPLATE
-static inline
+inline
 bool
 table_try_get_ptr(HashTable<Key, Value>* hash_table, Key key, Value** value) {
     Assert(hash_table->data, "Cannot get value from uninitalized hash table, use table_make to initialize it");
@@ -605,23 +479,4 @@ table_try_get_ptr(HashTable<Key, Value>* hash_table, Key key, Value** value) {
         if (hash_table->data[index].hash == 0)    return false;
     }
     return false;
-}
-
-template <typename Key, typename Value, typename Iterator>
-static inline
-void
-table_iterate(HashTable<Key, Value>* hash_table, Iterator iterator_func) {
-    Assert(hash_table->data, "Cannot iterate uninitalized hash table, use table_make to initialize it");
-    for (u32 i = 0; i < hash_table->length; i++) {
-        if (hash_table->data[i].hash != 0) {
-            iterator_func(hash_table->data[i].key, hash_table->data[i].value);
-        }
-    }
-}
-
-static inline
-u64
-table_double_hash(u64 hash, u32 length, u32 iteration) {
-    u64 secondary = 1 + (hash % (length - 1));
-    return (hash + iteration * secondary) % length;
 }

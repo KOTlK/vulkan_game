@@ -2,12 +2,14 @@
 
 #include "types.h"
 #include "geometry.h"
-#include "Vector2.h"
-#include "Vector3.h"
 #include "game_context.h"
-#include "text.h"
-#include "Matrix4.h"
-#include "Vector4.h"
+
+import vector3;
+import vector2;
+import vector4;
+import matrix4;
+import quaternion;
+import text;
 
 struct Window;
 struct Shader;

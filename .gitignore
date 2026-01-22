@@ -1,5 +1,7 @@
 build/
 .vscode/
+.cache/
+.vs
 
 *.exe
 *.pdb

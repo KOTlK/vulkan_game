@@ -36,6 +36,6 @@ const char* Component_Name_By_Bit[] = {
   "TestComponent4",
 };
 
-static inline ComponentTable* get_component_table_by_bit(u32 bit) {
+ComponentTable* get_component_table_by_bit(u32 bit) {
   return All_Components[bit];
 }

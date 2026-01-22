@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Vector2.h"
+import vector2;
 
 typedef struct Transform2D {
     Vector2 position;

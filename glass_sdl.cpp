@@ -1,11 +1,12 @@
 #include "SDL3/SDL_mouse.h"
 #include "glass.h"
-#include "list.h"
-#include "queue.h"
-#include "hash_table.h"
 #include "glass_sdl.h"
 #include <stdio.h>
 #include "debug.h"
+
+import list;
+import hash_table;
+import queue;
 
 #define Calloc(type, count) (type*)malloc(sizeof(type) * count)
 

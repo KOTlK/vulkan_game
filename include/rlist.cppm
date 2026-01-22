@@ -1,11 +1,14 @@
-#pragma once
+module;
 
 #include "basic.h"
-#include "queue.h"
 #include "memory.h"
 #include "assert.h"
 
-#define RLIST_TEMPLATE template <typename T>
+import queue;
+
+export module rlist;
+
+#define RLIST_TEMPLATE export template <typename T>
 #define RLIST_REALLOC_STEP 256
 
 RLIST_TEMPLATE
@@ -17,27 +20,9 @@ struct ReliableList {
     u32         length;
 };
 
-RLIST_TEMPLATE
-static inline void rlist_make(ReliableList<T>* list, u32 length = 32, Allocator* allocator = Allocator_Persistent);
 
 RLIST_TEMPLATE
-static inline void rlist_free(ReliableList<T>* list);
-
-RLIST_TEMPLATE
-static inline void rlist_realloc(ReliableList<T>* list, u32 len);
-
-RLIST_TEMPLATE
-static inline u32  rlist_append(ReliableList<T>* list, T item);
-
-RLIST_TEMPLATE
-static inline T    rlist_get(ReliableList<T>* list, u32 index);
-
-RLIST_TEMPLATE
-static inline void rlist_remove(ReliableList<T>* list, u32 index);
-
-
-RLIST_TEMPLATE
-static inline void rlist_make(ReliableList<T>* list, u32 length, Allocator* allocator) {
+inline void rlist_make(ReliableList<T>* list, u32 length, Allocator* allocator) {
     list->allocator = allocator;
     list->data      = AllocatorAlloc(T, allocator, sizeof(T) * length);
     list->count     = 0;
@@ -49,7 +34,7 @@ static inline void rlist_make(ReliableList<T>* list, u32 length, Allocator* allo
 }
 
 RLIST_TEMPLATE
-static inline void rlist_free(ReliableList<T>* list) {
+inline void rlist_free(ReliableList<T>* list) {
     Assert(list, "Cannot free non existing rlist");
     if (list->allocator != Allocator_Temp) {
         AllocatorFree(list->allocator, list->data);
@@ -58,7 +43,7 @@ static inline void rlist_free(ReliableList<T>* list) {
 }
 
 RLIST_TEMPLATE
-static inline void rlist_realloc(ReliableList<T>* list, u32 len) {
+inline void rlist_realloc(ReliableList<T>* list, u32 len) {
     Assert(list, "Cannot realloc non existing rlist");
 
     T* data;
@@ -77,7 +62,7 @@ static inline void rlist_realloc(ReliableList<T>* list, u32 len) {
 }
 
 RLIST_TEMPLATE
-static inline u32 rlist_append(ReliableList<T>* list, T item) {
+inline u32 rlist_append(ReliableList<T>* list, T item) {
     Assert(list, "Cannot append into non existing rlist");
     u32 index = 0;
     if (list->free.count > 0) {
@@ -96,13 +81,13 @@ static inline u32 rlist_append(ReliableList<T>* list, T item) {
 }
 
 RLIST_TEMPLATE
-static inline T rlist_get(ReliableList<T>* list, u32 index) {
+inline T rlist_get(ReliableList<T>* list, u32 index) {
     Assert(list, "Cannot get item from non existing rlist");
     return list->data[index];
 }
 
 RLIST_TEMPLATE
-static inline void rlist_remove(ReliableList<T>* list, u32 index) {
+inline void rlist_remove(ReliableList<T>* list, u32 index) {
     Assert(list, "Cannot remove item from non existing rlist");
 
     list->data[index] = {};

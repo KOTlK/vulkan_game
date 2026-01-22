@@ -6,28 +6,30 @@
 #include <cstdio>
 #include "basic.h"
 #include <cstring>
-#include "Vector2.h"
-#include "Vector3.h"
-#include "Matrix4.h"
 #include "geometry.h"
 #include <time.h>
 #include <stdlib.h>
 #include "assert.h"
-#include "hash_table.h"
 #include "render.h"
 #include "debug.h"
 #include "game_context.h"
-#include "array.h"
-#include "mathematics.h"
 #include "components.h"
 #include "component_system.h"
-#include "list.h"
-#include "queue.h"
-#include "Vector4.h"
-#include "text.h"
 #include "file.h"
-#include "bitmap.h"
 #include "context.h"
+
+import list;
+import hash_table;
+import array;
+import queue;
+import rlist;
+import vector3;
+import vector2;
+import vector4;
+import vector4;
+import math;
+import bitmap;
+import text;
 
 #define WIDTH  1280
 #define HEIGHT 720

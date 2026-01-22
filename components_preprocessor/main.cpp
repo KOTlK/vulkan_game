@@ -1,11 +1,12 @@
 #define TEXT_IMPLEMENTATION
 #define FILE_IMPLEMENTATION
-#include "basic.h"
+#include "types.h"
 #include <stdio.h>
 #include "debug.h"
-#include "text.h"
-#include "list.h"
 #include "file.h"
+
+import list;
+import text;
 
 // #define PRINT_DEBUG
 
@@ -194,7 +195,7 @@ int main(int argc, char** argv) {
 
     sb_append_line(&cpp_out);
 
-    sb_append_line(&cpp_out, "static inline ComponentTable* get_component_table_by_bit(u32 bit) {");
+    sb_append_line(&cpp_out, "ComponentTable* get_component_table_by_bit(u32 bit) {");
     sb_append_line(&cpp_out, "  return All_Components[bit];");
     sb_append_line(&cpp_out, "}");
 

@@ -1,18 +1,18 @@
-#pragma once
+module;
 
 #include "basic.h"
 #include <string.h>
 #include "debug.h"
 #include "assert.h"
-#include <stdio.h>
-#include <filesystem>
 
 #include "hash_functions.h"
+
+export module text;
 
 #define STRING_BUILDER_INITIAL_LENGTH 512
 #define STRING_BUILDER_REALLOC_STEP 256
 
-struct String {
+export struct String {
     Allocator* allocator;
     char*      text;
     u32        length;
@@ -40,7 +40,7 @@ struct String {
         return &text[length]; 
     }
 
-    char& operator[](u32 i) {
+    inline char& operator[](u32 i) {
         Assert(text, "Cannot lookup uninitialized string, use string_make or constructor to initialize it.");
         if (i >= length) {
             Log("HEllo");
@@ -49,14 +49,14 @@ struct String {
         return text[i];
     }
 
-    const char& operator[](u32 i) const {
+    inline const char& operator[](u32 i) const {
         Assert(text, "Cannot lookup uninitialized string, use string_make or constructor to initialize it.");
         Assert(i < length, "Index outside the bounds of the string");
         return text[i];
     }
 };
 
-struct StringBuilder {
+export struct StringBuilder {
     Allocator* allocator;
     char*      text;
     u32        length;
@@ -76,43 +76,42 @@ inline String::String(const char* str, Allocator* allocator) {
     text[length] = '\0';
 }
 
-static inline bool operator==(String lhs, String rhs);
-static inline bool operator==(String lhs, const char* rhs);
-static inline bool operator!=(String lhs, String rhs);
-static inline bool operator!=(String lhs, const char* rhs);
+// export inline bool operator==(String lhs, String rhs);
+// export inline bool operator==(String lhs, const char* rhs);
+// export inline bool operator!=(String lhs, String rhs);
+// export inline bool operator!=(String lhs, const char* rhs);
 
-static inline String  string_make_empty(u32 len, Allocator* allocator = Allocator_Persistent);
-static inline String* string_make_empty_ptr(u32 len, Allocator* text_allocator = Allocator_Persistent, Allocator* ptr_allocator = Allocator_Persistent);
-static inline String  string_make(const char* text, Allocator* allocator = Allocator_Persistent);
-static inline String* string_make_ptr(const char* text, Allocator* text_allocator = Allocator_Persistent, Allocator* ptr_allocator = Allocator_Persistent);
-static inline void    string_free(String* str);
+// export inline String  string_make_empty(u32 len, Allocator* allocator = Allocator_Persistent);
+// export inline String* string_make_empty_ptr(u32 len, Allocator* text_allocator = Allocator_Persistent, Allocator* ptr_allocator = Allocator_Persistent);
+// export inline String  string_make(const char* text, Allocator* allocator = Allocator_Persistent);
+// export inline String* string_make_ptr(const char* text, Allocator* text_allocator = Allocator_Persistent, Allocator* ptr_allocator = Allocator_Persistent);
+// export inline void    string_free(String* str);
 
-static inline bool   string_contains(String* str, const char c);
-static inline bool   string_ends_with(String* str, const char c);
-static inline String string_substring(String* str, u32 start, u32 end, Allocator* allocator = Allocator_Persistent);
-static inline bool   string_equals(String lhs, String rhs);
+// export inline bool   string_contains(String* str, const char c);
+// export inline bool   string_ends_with(String* str, const char c);
+// export inline String string_substring(String* str, u32 start, u32 end, Allocator* allocator = Allocator_Persistent);
+// export inline bool   string_equals(String lhs, String rhs);
 
-static inline StringBuilder sb_make(u32 len = STRING_BUILDER_INITIAL_LENGTH, Allocator* allocator = Allocator_Persistent);
-static inline void    sb_realloc(StringBuilder* sb, const u32 len);
-static inline void    sb_free(StringBuilder* sb);
-static inline void    sb_append(StringBuilder* sb, const char c);
-static inline void    sb_append(StringBuilder* sb, const String str);
-static inline void    sb_append(StringBuilder* sb, const char* str);
-static inline void    sb_append_line(StringBuilder* sb);
-static inline void    sb_append_line(StringBuilder* sb, const String str);
-static inline void    sb_append_line(StringBuilder* sb, const char* str);
-static inline void    sb_clear(StringBuilder* sb);
-static inline String  sb_to_string(StringBuilder* sb, Allocator* allocator = Allocator_Persistent);
-static inline String* sb_to_string_ptr(StringBuilder* sb, Allocator* text_allocator = Allocator_Persistent, Allocator* ptr_allocator = Allocator_Persistent);
-static inline char*   sb_to_cstring(StringBuilder* sb, Allocator* allocator = Allocator_Persistent);
+// export inline StringBuilder sb_make(u32 len = STRING_BUILDER_INITIAL_LENGTH, Allocator* allocator = Allocator_Persistent);
+// export inline void    sb_realloc(StringBuilder* sb, const u32 len);
+// export inline void    sb_free(StringBuilder* sb);
+// export inline void    sb_append(StringBuilder* sb, const char c);
+// export inline void    sb_append(StringBuilder* sb, const String str);
+// export inline void    sb_append(StringBuilder* sb, const char* str);
+// export inline void    sb_append_line(StringBuilder* sb);
+// export inline void    sb_append_line(StringBuilder* sb, const String str);
+// export inline void    sb_append_line(StringBuilder* sb, const char* str);
+// export inline void    sb_clear(StringBuilder* sb);
+// export inline String  sb_to_string(StringBuilder* sb, Allocator* allocator = Allocator_Persistent);
+// export inline String* sb_to_string_ptr(StringBuilder* sb, Allocator* text_allocator = Allocator_Persistent, Allocator* ptr_allocator = Allocator_Persistent);
+// export inline char*   sb_to_cstring(StringBuilder* sb, Allocator* allocator = Allocator_Persistent);
 
-static inline u64 get_hash(String string) {
+export inline u64 get_hash(String string) {
     return get_hash(string.text);
 }
 
-#ifdef TEXT_IMPLEMENTATION
 
-static inline bool operator==(String lhs, String rhs) {
+export inline bool operator==(String lhs, String rhs) {
     if (lhs.length != rhs.length) return false;
 
     for (u32 i = 0; i < lhs.length; i++) {
@@ -122,7 +121,7 @@ static inline bool operator==(String lhs, String rhs) {
     return true;
 }
 
-static inline bool operator==(String lhs, const char* rhs) {
+export inline bool operator==(String lhs, const char* rhs) {
     u32 len = strlen(rhs);
 
     if (lhs.length != len) return false;
@@ -134,15 +133,15 @@ static inline bool operator==(String lhs, const char* rhs) {
     return true;
 }
 
-static inline bool operator!=(String lhs, String rhs) {
+export inline bool operator!=(String lhs, String rhs) {
     return !(lhs == rhs);
 }
 
-static inline bool operator!=(String lhs, const char* rhs) {
+export inline bool operator!=(String lhs, const char* rhs) {
     return !(lhs == rhs);
 }
 
-static inline String string_make_empty(u32 len, Allocator* allocator) {
+export inline String string_make_empty(u32 len, Allocator* allocator = Allocator_Persistent) {
     String str{};
 
     str.allocator = allocator;
@@ -156,7 +155,7 @@ static inline String string_make_empty(u32 len, Allocator* allocator) {
     return str;
 }
 
-static inline String* string_make_empty_ptr(u32 len, Allocator* text_allocator, Allocator* ptr_allocator) {
+export inline String* string_make_empty_ptr(u32 len, Allocator* text_allocator = Allocator_Persistent, Allocator* ptr_allocator = Allocator_Persistent) {
     String* str = AllocatorAlloc(String, ptr_allocator, sizeof(String));
 
     str->allocator = text_allocator;
@@ -170,7 +169,7 @@ static inline String* string_make_empty_ptr(u32 len, Allocator* text_allocator, 
     return str;
 }
 
-static inline String string_make(const char* text, Allocator* allocator) {
+export inline String string_make(const char* text, Allocator* allocator = Allocator_Persistent) {
     u32 len = strlen(text);
 
     String str{};
@@ -192,7 +191,7 @@ static inline String string_make(const char* text, Allocator* allocator) {
     return str;
 }
 
-static inline String* string_make_ptr(const char* text, Allocator* text_allocator, Allocator* ptr_allocator) {
+export inline String* string_make_ptr(const char* text, Allocator* text_allocator = Allocator_Persistent, Allocator* ptr_allocator = Allocator_Persistent) {
     String* str = AllocatorAlloc(String, ptr_allocator, sizeof(String));
     
     u32 len = strlen(text);
@@ -213,11 +212,11 @@ static inline String* string_make_ptr(const char* text, Allocator* text_allocato
     return str;
 }
 
-static inline void   string_free(String* str) {
+export inline void   string_free(String* str) {
     AllocatorFree(str->allocator, str->text);
 }
 
-static inline bool string_contains(String* str, const char c) {
+export inline bool string_contains(String* str, const char c) {
     Assert(str->text, "Cannot search in uninitialized string.");
 
     for(u32 i = 0; i < str->length; i++) {
@@ -227,13 +226,13 @@ static inline bool string_contains(String* str, const char c) {
     return false;
 }
 
-static inline bool string_ends_with(String* str, const char c) {
+export inline bool string_ends_with(String* str, const char c) {
     Assert(str->text, "Cannot search in uninitialized string.");
 
     return (str->text[str->length - 1] == c);
 }
 
-static inline String string_substring(String* str, u32 start, u32 end, Allocator* allocator) {
+export inline String string_substring(String* str, u32 start, u32 end, Allocator* allocator) {
     Assert(str->text, "Cannot substring from uninitialized string.");
     Assertf(start < end, "Substring start index(%d) should be less then the end index(%d).", start, end);
     Assertf(end < str->length, "Substring end(%d) should be less then the input string length(%d).", end, str->length);
@@ -249,7 +248,7 @@ static inline String string_substring(String* str, u32 start, u32 end, Allocator
     return out;
 }
 
-static inline bool string_equals(String lhs, String rhs) {
+export inline bool string_equals(String lhs, String rhs) {
     if (lhs.length != rhs.length) return false;
 
     for (u32 i = 0; i < lhs.length; i++) {
@@ -259,7 +258,7 @@ static inline bool string_equals(String lhs, String rhs) {
     return true;
 }
 
-static inline StringBuilder sb_make(u32 len, Allocator* allocator) {
+export inline StringBuilder sb_make(u32 len = STRING_BUILDER_INITIAL_LENGTH, Allocator* allocator = Allocator_Persistent) {
     StringBuilder sb;
 
     sb.allocator = allocator;
@@ -272,7 +271,7 @@ static inline StringBuilder sb_make(u32 len, Allocator* allocator) {
     return sb;
 }
 
-static inline void sb_realloc(StringBuilder* sb, const u32 len) {
+export inline void sb_realloc(StringBuilder* sb, const u32 len) {
     if (sb->allocator == Allocator_Temp) {
         sb->text = AllocatorAlloc(char, sb->allocator, sizeof(char) * len);
     } else {
@@ -284,11 +283,11 @@ static inline void sb_realloc(StringBuilder* sb, const u32 len) {
     sb->length = len;
 }
 
-static inline void sb_free(StringBuilder* sb) {
+export inline void sb_free(StringBuilder* sb) {
     AllocatorFree(sb->allocator, sb->text);
 }
 
-static inline void sb_append(StringBuilder* sb, const char c) {
+export inline void sb_append(StringBuilder* sb, const char c) {
     if (sb->count >= sb->length) {
         sb_realloc(sb, sb->count + STRING_BUILDER_REALLOC_STEP);
     }
@@ -296,7 +295,7 @@ static inline void sb_append(StringBuilder* sb, const char c) {
     sb->text[sb->count++] = c;
 }
 
-static inline void sb_append(StringBuilder* sb, const String str) {
+export inline void sb_append(StringBuilder* sb, const String str) {
     if (sb->count + str.length >= sb->length) {
         sb_realloc(sb, sb->count + str.length + STRING_BUILDER_REALLOC_STEP);
     }
@@ -308,7 +307,7 @@ static inline void sb_append(StringBuilder* sb, const String str) {
     sb->count += str.length;
 }
 
-static inline void sb_append(StringBuilder* sb, const char* str) {
+export inline void sb_append(StringBuilder* sb, const char* str) {
     u32 len = strlen(str);
     if (sb->count + len >= sb->length) {
         sb_realloc(sb, sb->count + len + STRING_BUILDER_REALLOC_STEP);
@@ -321,25 +320,25 @@ static inline void sb_append(StringBuilder* sb, const char* str) {
     sb->count += len;
 }
 
-static inline void sb_append_line(StringBuilder* sb) {
+export inline void sb_append_line(StringBuilder* sb) {
     sb_append(sb, '\n');
 }
 
-static inline void sb_append_line(StringBuilder* sb, const String str) {
+export inline void sb_append_line(StringBuilder* sb, const String str) {
     sb_append(sb, str);
     sb_append(sb, '\n');
 }
 
-static inline void sb_append_line(StringBuilder* sb, const char* str) {
+export inline void sb_append_line(StringBuilder* sb, const char* str) {
     sb_append(sb, str);
     sb_append(sb, '\n');
 }
 
-static inline void sb_clear(StringBuilder* sb) {
+export inline void sb_clear(StringBuilder* sb) {
     sb->count = 0;
 }
 
-static inline String sb_to_string(StringBuilder* sb, Allocator* allocator) {
+export inline String sb_to_string(StringBuilder* sb, Allocator* allocator = Allocator_Persistent) {
     String str = string_make_empty(sb->count, allocator);
 
     for (u32 i = 0; i < sb->count; i++) {
@@ -349,7 +348,7 @@ static inline String sb_to_string(StringBuilder* sb, Allocator* allocator) {
     return str;
 }
 
-static inline String* sb_to_string_ptr(StringBuilder* sb, Allocator* text_allocator, Allocator* ptr_allocator) {
+export inline String* sb_to_string_ptr(StringBuilder* sb, Allocator* text_allocator = Allocator_Persistent, Allocator* ptr_allocator = Allocator_Persistent) {
     String* str = string_make_empty_ptr(sb->count, text_allocator, ptr_allocator);
 
     for (u32 i = 0; i < sb->count; i++) {
@@ -359,7 +358,7 @@ static inline String* sb_to_string_ptr(StringBuilder* sb, Allocator* text_alloca
     return str;
 }
 
-static inline char* sb_to_cstring(StringBuilder* sb, Allocator* allocator) {
+export inline char* sb_to_cstring(StringBuilder* sb, Allocator* allocator = Allocator_Persistent) {
     char* str = AllocatorAlloc(char, allocator, sizeof(char) * sb->count);
 
     for (u32 i = 0; i < sb->count; i++) {
@@ -368,5 +367,3 @@ static inline char* sb_to_cstring(StringBuilder* sb, Allocator* allocator) {
 
     return str;
 }
-
-#endif // TEXT_IMPLEMENTATION

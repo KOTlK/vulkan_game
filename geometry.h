@@ -1,7 +1,8 @@
 #pragma once
 
 #include "types.h"
-#include "Vector3.h"
+
+import vector3;
 
 typedef struct Color {
     u8 r, g, b, a;

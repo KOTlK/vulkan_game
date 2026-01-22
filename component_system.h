@@ -2,11 +2,14 @@
 
 #include "basic.h"
 #include "assert.h"
-#include "memory.h"
-#include "hash_table.h"
-#include "list.h"
-#include "bitmap.h"
+#include "malloc.h"
+#include <string.h>
+#define BITMAP_IMPLEMENTATION
 #include "components.h"
+
+import list;
+import hash_table;
+import bitmap;
 
 #define COMPONENTS_ADD_REALLOC_COUNT 256
 

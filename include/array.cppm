@@ -1,10 +1,12 @@
-#pragma once
+module;
 
 #include "basic.h"
 #include "allocator.h"
 #include "assert.h"
 
-#define ARRAY_TEMPLATE template <typename T>
+export module array;
+
+#define ARRAY_TEMPLATE export template <typename T>
 
 ARRAY_TEMPLATE
 struct Array {
@@ -48,52 +50,11 @@ struct Array {
     ~Array() = default;
 };
 
+
 ARRAY_TEMPLATE
-static inline
+inline
 void
-array_make(Array<T>* array, u64 length, Allocator* allocator = Allocator_Persistent);
-
-ARRAY_TEMPLATE
-static inline
-void
-array_realloc(Array<T>* array, u64 length);
-
-ARRAY_TEMPLATE
-static inline
-void
-array_free(Array<T>* array);
-
-ARRAY_TEMPLATE
-static inline
-T
-array_get(Array<T>* array, u64 index);
-
-ARRAY_TEMPLATE
-static inline
-T*
-array_get_ptr(Array<T>* array, u64 index);
-
-ARRAY_TEMPLATE
-static inline
-void
-array_set(Array<T>* array, u64 index, T elem);
-
-ARRAY_TEMPLATE
-static inline
-void
-array_clear(Array<T>* array);
-
-ARRAY_TEMPLATE
-static inline
-u32
-array_index_of_ptr(Array<T>* arr, T* elem);
-
-
-// implementataion
-ARRAY_TEMPLATE
-static inline
-void
-array_make(Array<T>* array, u64 length, Allocator* allocator) {
+array_make(Array<T>* array, u64 length, Allocator* allocator = Allocator_Persistent) {
     auto data = AllocatorAlloc(T, allocator, sizeof(T) * length);
     Assert(data, "Cannot allocate data for the array.");
 
@@ -103,7 +64,7 @@ array_make(Array<T>* array, u64 length, Allocator* allocator) {
 }
 
 ARRAY_TEMPLATE
-static inline
+inline
 void
 array_realloc(Array<T>* array, u64 length) {
     Assert(array->data, "Cannot realloc uninitialized array, initialize it with array_make.");
@@ -126,7 +87,7 @@ array_realloc(Array<T>* array, u64 length) {
 }
 
 ARRAY_TEMPLATE
-static inline
+inline
 void
 array_free(Array<T>* array) {
     Assert(array->data, "Cannot free uninitialized array, initialize it with array_make.");
@@ -136,7 +97,7 @@ array_free(Array<T>* array) {
 }
 
 ARRAY_TEMPLATE
-static inline
+inline
 T
 array_get(Array<T>* array, u64 index) {
     Assert(array->data, "Cannot get item from uninitialized array, initialize it with array_make.");
@@ -145,7 +106,7 @@ array_get(Array<T>* array, u64 index) {
 }
 
 ARRAY_TEMPLATE
-static inline
+inline
 T*
 array_get_ptr(Array<T>* array, u64 index) {
     Assert(array->data, "Cannot get item pointer from uninitialized array, initialize it with array_make.");
@@ -154,7 +115,7 @@ array_get_ptr(Array<T>* array, u64 index) {
 }
 
 ARRAY_TEMPLATE
-static inline
+inline
 void
 array_set(Array<T>* array, u64 index, T elem) {
     Assert(array->data, "Cannot set item to uninitialized array, initialize it with array_make.");
@@ -163,7 +124,7 @@ array_set(Array<T>* array, u64 index, T elem) {
 }
 
 ARRAY_TEMPLATE
-static inline
+inline
 void
 array_clear(Array<T>* array) {
     Assert(array->data, "Cannot clear uninitialized array, initialize it with array_make.");
@@ -173,7 +134,7 @@ array_clear(Array<T>* array) {
 }
 
 ARRAY_TEMPLATE
-static inline
+inline
 u32
 array_index_of_ptr(Array<T>* array, T* elem) {
     Assert(array->data, "Cannot get index of pointer inside uninitialized array, initialize it with array_make.");

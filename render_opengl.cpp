@@ -2,15 +2,17 @@
 #define TEXT_IMPLEMENTATION
 #include "glass.h"
 #include "render.h"
+#include "assert.h"
 #include "debug.h"
 #include "glad/glad.h"
-#include "text.h"
-#include "list.h"
-#include "hash_table.h"
 #include <cstddef>
-#include "Vector3.h"
-#include "Matrix4.h"
-#include "Vector4.h"
+
+import list;
+import hash_table;
+import vector3;
+import vector4;
+import matrix4;
+import text;
 
 #ifdef GLASS_SDL
 #include "glass_sdl.h"

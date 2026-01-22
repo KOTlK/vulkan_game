@@ -1,10 +1,15 @@
-#pragma once
+module;
 
 #include <math.h>
-#include "Vector3.h"
-#include "quaternion.h"
+#include "debug.h"
 
-typedef union Matrix4 {
+import math;
+import vector3;
+import quaternion;
+
+export module matrix4;
+
+export union Matrix4 {
     // column-major, right-handed
     struct {
         float m0, m4, m8,  m12;
@@ -13,75 +18,15 @@ typedef union Matrix4 {
         float m3, m7, m11, m15;
     };
     float e[16];
-} Matrix4;
+};
 
-static inline Matrix4 matrix4_identity = {{1, 0, 0, 0,
+export inline Matrix4 matrix4_identity = {{1, 0, 0, 0,
                                           0, 1, 0, 0,
                                           0, 0, 1, 0,
                                           0, 0, 0, 1}};
 
-static inline Matrix4 matrix4_make(float m0, float m4, float m8,  float m12,
-                                   float m1, float m5, float m9,  float m13,
-                                   float m2, float m6, float m10, float m14,
-                                   float m3, float m7, float m11, float m15);
 
-static inline Matrix4 matrix4_add(const Matrix4& lhs, const Matrix4& rhs);
-static inline Matrix4 matrix4_sub(const Matrix4& lhs, const Matrix4& rhs);
-static inline Matrix4 matrix4_mul(const Matrix4& lhs, const Matrix4& rhs);
-static inline float   matrix4_det(const Matrix4& mat);
-static inline void    matrix4_transpose(Matrix4& mat);
-static inline Matrix4 matrix4_transposed(const Matrix4& mat);
-static inline Matrix4 matrix4_transform(const float x, const float y, const float z);
-static inline Matrix4 matrix4_transform(const Vector3 v);
-// static inline Matrix4 matrix4_transform_2d(const float x, const float y);
-// static inline Matrix4 matrix4_rotate_2d(float angle);
-// static inline Matrix4 matrix4_scale_2d(float x, float y);
-static inline Matrix4 matrix4_scale(const float x, const float y, const float z);
-static inline Matrix4 matrix4_scale(const Vector3 v);
-// static inline Matrix4 matrix4_trs_2d(float px, float py, float angle, float sx, float sy);
-// static inline Matrix4 matrix4_camera_view_2d(Vector3 position);
-// static inline Matrix4 matrix4_ortho_2d(float left, float right, float top, float bottom);
-static inline Matrix4 matrix4_rotate(const Quaternion& q);
-static inline Matrix4 matrix4_trs(const Vector3& p, const Quaternion& r, const Vector3& s);
-static inline Matrix4 matrix4_perspective(float fov, 
-                                          float aspect, 
-                                          float near_plane, 
-                                          float far_plane);
-
-static inline Matrix4 matrix4_view(const Vector3& p, const Quaternion& r);
-
-static inline Matrix4 matrix4_vp(const Vector3& eye_pos, 
-                                 const Quaternion& r,
-                                 float fov,
-                                 float aspect,
-                                 float near_plane,
-                                 float far_plane);
-
-static inline Matrix4 matrix4_mvp(const Vector3& p, 
-                                  const Quaternion& r, 
-                                  const Vector3& s,
-                                  const Vector3& eye_p,
-                                  const Quaternion& eye_r,
-                                  float fov,
-                                  float aspect,
-                                  float near_plane,
-                                  float far_plane);
-
-static inline void matrix4_print(Matrix4& m);
-
-static inline Matrix4  operator+(const Matrix4& lhs, const Matrix4& rhs);
-static inline Matrix4& operator+=(Matrix4& lhs, const Matrix4& rhs);
-static inline Matrix4  operator-(const Matrix4& lhs, const Matrix4& rhs);
-static inline Matrix4& operator-=(Matrix4& lhs, const Matrix4& rhs);
-static inline Matrix4  operator*(const Matrix4& lhs, const Matrix4& rhs);
-
-// #define GAME_MATH_IMPLEMENTATION 
-#ifdef GAME_MATH_IMPLEMENTATION
-
-#include "mathematics.h"
-#include "debug.h"
-
-static inline Matrix4 matrix4_make(float m0, float m4, float m8,  float m12,
+export inline Matrix4 matrix4_make(float m0, float m4, float m8,  float m12,
                                    float m1, float m5, float m9,  float m13,
                                    float m2, float m6, float m10, float m14,
                                    float m3, float m7, float m11, float m15) {
@@ -107,7 +52,7 @@ static inline Matrix4 matrix4_make(float m0, float m4, float m8,  float m12,
     return matrix;
 }
 
-static inline Matrix4  operator+(const Matrix4& lhs, const Matrix4& rhs) {
+export inline Matrix4  operator+(const Matrix4& lhs, const Matrix4& rhs) {
     Matrix4 res {
         .m0 = lhs.m0 + rhs.m0,
         .m4 = lhs.m4 + rhs.m4,
@@ -130,7 +75,7 @@ static inline Matrix4  operator+(const Matrix4& lhs, const Matrix4& rhs) {
     return res;
 }
 
-static inline Matrix4& operator+=(Matrix4& lhs, const Matrix4& rhs) {
+export inline Matrix4& operator+=(Matrix4& lhs, const Matrix4& rhs) {
     lhs.m0 += rhs.m0;
     lhs.m4 += rhs.m4;
     lhs.m8 += rhs.m8;
@@ -151,7 +96,7 @@ static inline Matrix4& operator+=(Matrix4& lhs, const Matrix4& rhs) {
     return lhs;
 }
 
-static inline Matrix4  operator-(const Matrix4& lhs, const Matrix4& rhs) {
+export inline Matrix4  operator-(const Matrix4& lhs, const Matrix4& rhs) {
     Matrix4 res {
         .m0 = lhs.m0 - rhs.m0,
         .m4 = lhs.m4 - rhs.m4,
@@ -174,7 +119,7 @@ static inline Matrix4  operator-(const Matrix4& lhs, const Matrix4& rhs) {
     return res;
 }
 
-static inline Matrix4& operator-=(Matrix4& lhs, const Matrix4& rhs) {
+export inline Matrix4& operator-=(Matrix4& lhs, const Matrix4& rhs) {
     lhs.m0 -= rhs.m0;
     lhs.m4 -= rhs.m4;
     lhs.m8 -= rhs.m8;
@@ -195,13 +140,13 @@ static inline Matrix4& operator-=(Matrix4& lhs, const Matrix4& rhs) {
     return lhs;
 }
 
-static inline Matrix4  operator*(const Matrix4& lhs, const Matrix4& rhs) {
+export inline Matrix4  operator*(const Matrix4& lhs, const Matrix4& rhs) {
     Matrix4 res {
         .m0  = lhs.m0*rhs.m0  + lhs.m1*rhs.m4  + lhs.m2*rhs.m8   + lhs.m3*rhs.m12,
+        .m4  = lhs.m4*rhs.m0  + lhs.m5*rhs.m4  + lhs.m6*rhs.m8   + lhs.m7*rhs.m12,
         .m1  = lhs.m0*rhs.m1  + lhs.m1*rhs.m5  + lhs.m2*rhs.m9   + lhs.m3*rhs.m13,
         .m2  = lhs.m0*rhs.m2  + lhs.m1*rhs.m6  + lhs.m2*rhs.m10  + lhs.m3*rhs.m14,
         .m3  = lhs.m0*rhs.m3  + lhs.m1*rhs.m7  + lhs.m2*rhs.m11  + lhs.m3*rhs.m15,
-        .m4  = lhs.m4*rhs.m0  + lhs.m5*rhs.m4  + lhs.m6*rhs.m8   + lhs.m7*rhs.m12,
         .m5  = lhs.m4*rhs.m1  + lhs.m5*rhs.m5  + lhs.m6*rhs.m9   + lhs.m7*rhs.m13,
         .m6  = lhs.m4*rhs.m2  + lhs.m5*rhs.m6  + lhs.m6*rhs.m10  + lhs.m7*rhs.m14,
         .m7  = lhs.m4*rhs.m3  + lhs.m5*rhs.m7  + lhs.m6*rhs.m11  + lhs.m7*rhs.m15,
@@ -218,7 +163,7 @@ static inline Matrix4  operator*(const Matrix4& lhs, const Matrix4& rhs) {
     return res;
 }
 
-static inline Matrix4 matrix4_add(const Matrix4& lhs, const Matrix4& rhs) {
+export inline Matrix4 matrix4_add(const Matrix4& lhs, const Matrix4& rhs) {
     Matrix4 res {
         .m0 = lhs.m0 + rhs.m0,
         .m4 = lhs.m4 + rhs.m4,
@@ -241,7 +186,7 @@ static inline Matrix4 matrix4_add(const Matrix4& lhs, const Matrix4& rhs) {
     return res;
 }
 
-static inline Matrix4 matrix4_sub(const Matrix4& lhs, const Matrix4& rhs) {
+export inline Matrix4 matrix4_sub(const Matrix4& lhs, const Matrix4& rhs) {
     Matrix4 res {
         .m0 = lhs.m0 - rhs.m0,
         .m4 = lhs.m4 - rhs.m4,
@@ -264,7 +209,7 @@ static inline Matrix4 matrix4_sub(const Matrix4& lhs, const Matrix4& rhs) {
     return res;
 }
 
-static inline Matrix4 matrix4_mul(const Matrix4& lhs, const Matrix4& rhs) {
+export inline Matrix4 matrix4_mul(const Matrix4& lhs, const Matrix4& rhs) {
     Matrix4 res {
         .m0  = lhs.m0*rhs.m0  + lhs.m1*rhs.m4  + lhs.m2*rhs.m8   + lhs.m3*rhs.m12,
         .m1  = lhs.m0*rhs.m1  + lhs.m1*rhs.m5  + lhs.m2*rhs.m9   + lhs.m3*rhs.m13,
@@ -287,7 +232,7 @@ static inline Matrix4 matrix4_mul(const Matrix4& lhs, const Matrix4& rhs) {
     return res;
 }
 
-static inline float   matrix4_det(const Matrix4& mat) {
+export inline float   matrix4_det(const Matrix4& mat) {
     float result = 0.0f;
 
     float m0  = mat.m0,  m1  = mat.m1,  m2  = mat.m2,  m3  = mat.m3;
@@ -303,7 +248,7 @@ static inline float   matrix4_det(const Matrix4& mat) {
     return result;
 }
 
-static inline void matrix4_transpose(Matrix4& mat) {
+export inline void matrix4_transpose(Matrix4& mat) {
     swap(&mat.m1,  &mat.m4);
     swap(&mat.m2,  &mat.m8);
     swap(&mat.m3,  &mat.m12);
@@ -313,7 +258,7 @@ static inline void matrix4_transpose(Matrix4& mat) {
 
 }
 
-static inline Matrix4 matrix4_transposed(const Matrix4& mat) {
+export inline Matrix4 matrix4_transposed(const Matrix4& mat) {
     Matrix4 res = {
         .m0  = mat.m0,
         .m4  = mat.m1,
@@ -336,28 +281,28 @@ static inline Matrix4 matrix4_transposed(const Matrix4& mat) {
     return res;
 }
 
-static inline Matrix4 matrix4_transform(const float x, const float y, const float z) {
+export inline Matrix4 matrix4_transform(const float x, const float y, const float z) {
     return matrix4_make(1, 0, 0, 0,
                         0, 1, 0, 0,
                         0, 0, 1, 0,
                         x, y, z, 1);
 }
 
-static inline Matrix4 matrix4_transform(const Vector3 v) {
+export inline Matrix4 matrix4_transform(const Vector3 v) {
     return matrix4_make(1,   0,   0,   0,
                         0,   1,   0,   0,
                         0,   0,   1,   0,
                         v.x, v.y, v.z, 1);
 }
 
-static inline Matrix4 matrix4_transform_2d(const float x, const float y) {
+export inline Matrix4 matrix4_transform_2d(const float x, const float y) {
     return matrix4_make(1, 0, 0, 0,
                         0, 1, 0, 0,
                         0, 0, 1, 0,
                         x, y, 0, 1);
 }
 
-static inline Matrix4 matrix4_rotate_2d(float angle) {
+export inline Matrix4 matrix4_rotate_2d(float angle) {
     float c = cosf(angle);
     float s = sinf(angle);
     return matrix4_make( c, s, 0, 0,
@@ -366,28 +311,28 @@ static inline Matrix4 matrix4_rotate_2d(float angle) {
                          0, 0, 0, 1);
 }
 
-static inline Matrix4 matrix4_scale_2d(float x, float y) {
+export inline Matrix4 matrix4_scale_2d(float x, float y) {
     return matrix4_make( x, 0, 0, 0,
                          0, y, 0, 0,
                          0, 0, 1, 0,
                          0, 0, 0, 1);
 }
 
-static inline Matrix4 matrix4_scale(const float x, const float y, const float z) {
+export inline Matrix4 matrix4_scale(const float x, const float y, const float z) {
     return matrix4_make( x, 0, 0, 0,
                          0, y, 0, 0,
                          0, 0, z, 0,
                          0, 0, 0, 1);
 }
 
-static inline Matrix4 matrix4_scale(const Vector3 v) {
+export inline Matrix4 matrix4_scale(const Vector3 v) {
     return matrix4_make( v.x, 0,   0,   0,
                          0,   v.y, 0,   0,
                          0,   0,   v.z, 0,
                          0,   0,   0,   1);
 }
 
-static inline Matrix4 matrix4_trs_2d(float px, float py, float angle, float sx, float sy) {
+export inline Matrix4 matrix4_trs_2d(float px, float py, float angle, float sx, float sy) {
     float s = sinf(angle);
     float c = cosf(angle);
 
@@ -397,14 +342,14 @@ static inline Matrix4 matrix4_trs_2d(float px, float py, float angle, float sx, 
                          px,      py,     0, 1);
 }
 
-static inline Matrix4 matrix4_camera_view_2d(Vector3 position) {
+export inline Matrix4 matrix4_camera_view_2d(Vector3 position) {
     return matrix4_make( 1,            0,          0, 0,
                          0,            1,          0, 0,
                          0,            0,          1, 0,
                          -position.x, -position.y, 0, 1);
 }
 
-static inline Matrix4 matrix4_ortho_2d(float left, float right, float top, float bottom) {
+export inline Matrix4 matrix4_ortho_2d(float left, float right, float top, float bottom) {
     float rml = right - left;
     float tmb = top - bottom;
     return matrix4_make( 2.0f / (rml),            0,                      0, 0,
@@ -413,7 +358,7 @@ static inline Matrix4 matrix4_ortho_2d(float left, float right, float top, float
                          -(right + left) / (rml), (top + bottom) / (tmb), 0, 1);
 }
 
-static inline Matrix4 matrix4_rotate(const Quaternion& q) {
+export inline Matrix4 matrix4_rotate(const Quaternion& q) {
     Matrix4 mat = matrix4_identity;
 
     float xx = q.x*q.x;
@@ -469,7 +414,7 @@ static inline Matrix4 matrix4_rotate(const Quaternion& q) {
     return mat;
 }
 
-static inline Matrix4 matrix4_trs(const Vector3& p, const Quaternion& r, const Vector3& s) {
+export inline Matrix4 matrix4_trs(const Vector3& p, const Quaternion& r, const Vector3& s) {
     Matrix4 t = matrix4_transform(p);
     Matrix4 rot = matrix4_rotate(r);
     Matrix4 sc  = matrix4_scale(s);
@@ -483,7 +428,7 @@ static inline Matrix4 matrix4_trs(const Vector3& p, const Quaternion& r, const V
     // return t * rot * sc;
 }
 
-static inline Matrix4 matrix4_perspective(float fov,
+export inline Matrix4 matrix4_perspective(float fov,
                                           float aspect,
                                           float near_plane,
                                           float far_plane) {
@@ -501,7 +446,7 @@ static inline Matrix4 matrix4_perspective(float fov,
     return proj;
 }
 
-static inline Matrix4 matrix4_view(const Vector3& p, const Quaternion& r) {
+export inline Matrix4 matrix4_view(const Vector3& p, const Quaternion& r) {
     Matrix4 t   = matrix4_transform(-p);
     Matrix4 rot = matrix4_rotate(conjugate(r));
 
@@ -510,7 +455,7 @@ static inline Matrix4 matrix4_view(const Vector3& p, const Quaternion& r) {
     return view;
 }
 
-static inline Matrix4 matrix4_vp(const Vector3& eye_pos, 
+export inline Matrix4 matrix4_vp(const Vector3& eye_pos, 
                                  const Quaternion& r,
                                  float fov,
                                  float aspect,
@@ -522,7 +467,7 @@ static inline Matrix4 matrix4_vp(const Vector3& eye_pos,
     return proj * view;
 }
 
-static inline Matrix4 matrix4_mvp(const Vector3& p, 
+export inline Matrix4 matrix4_mvp(const Vector3& p, 
                                   const Quaternion& r, 
                                   const Vector3& s,
                                   const Vector3& eye_p,
@@ -537,7 +482,7 @@ static inline Matrix4 matrix4_mvp(const Vector3& p,
     return vp * model;
 }
 
-static inline void matrix4_print(Matrix4& m) {
+export inline void matrix4_print(Matrix4& m) {
     Logf("%f, %f, %f, %f\n"
          "%f, %f, %f, %f\n"
          "%f, %f, %f, %f\n"
@@ -546,5 +491,3 @@ static inline void matrix4_print(Matrix4& m) {
                              m.m2, m.m6, m.m10, m.m14,
                              m.m3, m.m7, m.m11, m.m15);
 }
-
-#endif //GAME_MATH_IMPLEMENTATION

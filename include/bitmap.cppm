@@ -1,11 +1,13 @@
-#pragma once
+module;
 
 #include "types.h"
 #include "assert.h"
 #include "debug.h"
 #include "stdio.h"
 
-#define BITMAP_TEMPLATE template <u32 bit_count = 256>
+export module bitmap;
+
+#define BITMAP_TEMPLATE export template <u32 bit_count = 256>
 
 #define BITS_PER_SLOT (sizeof(u64) * 8)
 
@@ -15,41 +17,9 @@ struct Bitmap {
     u64 bits[bit_count / BITS_PER_SLOT] = {};
 };
 
-BITMAP_TEMPLATE
-static inline bool operator==(const Bitmap<bit_count> lhs, const Bitmap<bit_count> rhs);
 
 BITMAP_TEMPLATE
-static inline bool operator!=(const Bitmap<bit_count>& lhs, const Bitmap<bit_count>& rhs);
-
-template<u32 bit_count = 256, typename... Args>
-static inline Bitmap<bit_count> bitmap_make(Args... args);
-
-BITMAP_TEMPLATE
-static inline void bitmap_set_bit(Bitmap<bit_count>& bitmap, const u32 bit);
-
-BITMAP_TEMPLATE
-static inline void bitmap_clear_bit(Bitmap<bit_count>& bitmap, const u32 bit);
-
-BITMAP_TEMPLATE
-static inline void bitmap_toggle_bit(Bitmap<bit_count>& bitmap, const u32 bit);
-
-BITMAP_TEMPLATE
-static inline bool bitmap_test_bit(Bitmap<bit_count>& bitmap, const u32 bit);
-
-BITMAP_TEMPLATE
-static inline void bitmap_clear_all(Bitmap<bit_count>& bitmap);
-
-BITMAP_TEMPLATE
-static inline void bitmap_set_all(Bitmap<bit_count>& bitmap);
-
-BITMAP_TEMPLATE
-static inline void bitmap_print(const Bitmap<bit_count>& bitmap);
-
-BITMAP_TEMPLATE
-static inline Bitmap<bit_count> bitmap_and(Bitmap<bit_count>& a, Bitmap<bit_count>& b);
-
-BITMAP_TEMPLATE
-static inline u64 get_hash(Bitmap<bit_count> bitmap) {
+inline u64 get_hash(Bitmap<bit_count> bitmap) {
     u32 count = bit_count / BITS_PER_SLOT;
     u64 total = 0;
 
@@ -60,12 +30,9 @@ static inline u64 get_hash(Bitmap<bit_count> bitmap) {
     return total;
 }
 
-#ifdef BITMAP_IMPLEMENTATION
 
-#define BITMAP_TEMPLATE_IMPL template <u32 bit_count>
-
-template<u32 bit_count, typename... Args>
-static inline Bitmap<bit_count> bitmap_make(Args... args) {
+export template<u32 bit_count, typename... Args>
+inline Bitmap<bit_count> bitmap_make(Args... args) {
     Bitmap<bit_count> bitmap = {};
     
     for (const auto arg : {args...}) {
@@ -75,8 +42,8 @@ static inline Bitmap<bit_count> bitmap_make(Args... args) {
     return bitmap;
 }
 
-BITMAP_TEMPLATE_IMPL
-static inline bool operator==(const Bitmap<bit_count> lhs, const Bitmap<bit_count> rhs) {
+BITMAP_TEMPLATE
+inline bool operator==(const Bitmap<bit_count> lhs, const Bitmap<bit_count> rhs) {
     u32 count = bit_count / BITS_PER_SLOT;
 
     for (u32 i = 0; i < count; i++) {
@@ -88,13 +55,13 @@ static inline bool operator==(const Bitmap<bit_count> lhs, const Bitmap<bit_coun
     return true;
 }
 
-BITMAP_TEMPLATE_IMPL
-static inline bool operator!=(const Bitmap<bit_count>& lhs, const Bitmap<bit_count>& rhs) {
+BITMAP_TEMPLATE
+inline bool operator!=(const Bitmap<bit_count>& lhs, const Bitmap<bit_count>& rhs) {
     return !(lhs == rhs);
 }
 
-BITMAP_TEMPLATE_IMPL
-static inline void bitmap_set_bit(Bitmap<bit_count>& bitmap, const u32 bit) {
+BITMAP_TEMPLATE
+inline void bitmap_set_bit(Bitmap<bit_count>& bitmap, const u32 bit) {
     Assertf(bit < bit_count, "Cannot set bit #%d bitmap length (%d) is less than the bit, you want to set.", bit, bit_count);
     u32 index     = bit / BITS_PER_SLOT;
     u32 local_bit = bit % BITS_PER_SLOT;
@@ -102,8 +69,8 @@ static inline void bitmap_set_bit(Bitmap<bit_count>& bitmap, const u32 bit) {
     bitmap.bits[index] |= (1ULL << local_bit);
 }
 
-BITMAP_TEMPLATE_IMPL
-static inline void bitmap_clear_bit(Bitmap<bit_count>& bitmap, const u32 bit) {
+BITMAP_TEMPLATE
+inline void bitmap_clear_bit(Bitmap<bit_count>& bitmap, const u32 bit) {
     Assertf(bit < bit_count, "Cannot set bit #%d bitmap length (%d) is less than the bit, you want to set.", bit, bit_count);
     u32 index     = bit / BITS_PER_SLOT;
     u32 local_bit = bit % BITS_PER_SLOT;
@@ -111,8 +78,8 @@ static inline void bitmap_clear_bit(Bitmap<bit_count>& bitmap, const u32 bit) {
     bitmap.bits[index] &= ~(1ULL << local_bit);
 }
 
-BITMAP_TEMPLATE_IMPL
-static inline void bitmap_toggle_bit(Bitmap<bit_count>& bitmap, const u32 bit) {
+BITMAP_TEMPLATE
+inline void bitmap_toggle_bit(Bitmap<bit_count>& bitmap, const u32 bit) {
     Assertf(bit < bit_count, "Cannot set bit #%d bitmap length (%d) is less than the bit, you want to set.", bit, bit_count);
     u32 index     = bit / BITS_PER_SLOT;
     u32 local_bit = bit % BITS_PER_SLOT;
@@ -120,8 +87,8 @@ static inline void bitmap_toggle_bit(Bitmap<bit_count>& bitmap, const u32 bit) {
     bitmap.bits[index] ^= (1ULL << local_bit);
 }
 
-BITMAP_TEMPLATE_IMPL
-static inline bool bitmap_test_bit(Bitmap<bit_count>& bitmap, const u32 bit) {
+BITMAP_TEMPLATE
+inline bool bitmap_test_bit(Bitmap<bit_count>& bitmap, const u32 bit) {
     Assertf(bit < bit_count, "Cannot set bit #%d bitmap length (%d) is less than the bit, you want to set.", bit, bit_count);
     u32 index     = bit / BITS_PER_SLOT;
     u32 local_bit = bit % BITS_PER_SLOT;
@@ -129,8 +96,8 @@ static inline bool bitmap_test_bit(Bitmap<bit_count>& bitmap, const u32 bit) {
     return (bitmap.bits[index] & (1ULL << local_bit)) != 0;
 }
 
-BITMAP_TEMPLATE_IMPL
-static inline void bitmap_clear_all(Bitmap<bit_count>& bitmap) {
+BITMAP_TEMPLATE
+inline void bitmap_clear_all(Bitmap<bit_count>& bitmap) {
     u32 count = bit_count / BITS_PER_SLOT;
 
     for (u32 i = 0; i < count; i++) {
@@ -138,8 +105,8 @@ static inline void bitmap_clear_all(Bitmap<bit_count>& bitmap) {
     }
 }
 
-BITMAP_TEMPLATE_IMPL
-static inline void bitmap_set_all(Bitmap<bit_count>& bitmap) {
+BITMAP_TEMPLATE
+inline void bitmap_set_all(Bitmap<bit_count>& bitmap) {
     u32 count = bit_count / BITS_PER_SLOT;
 
     for (u32 i = 0; i < count; i++) {
@@ -147,8 +114,8 @@ static inline void bitmap_set_all(Bitmap<bit_count>& bitmap) {
     }
 }
 
-BITMAP_TEMPLATE_IMPL
-static inline Bitmap<bit_count> bitmap_and(Bitmap<bit_count>& a, Bitmap<bit_count>& b) {
+BITMAP_TEMPLATE
+inline Bitmap<bit_count> bitmap_and(Bitmap<bit_count>& a, Bitmap<bit_count>& b) {
     Bitmap<bit_count> res;
     u32 count = bit_count / BITS_PER_SLOT;
 
@@ -159,8 +126,8 @@ static inline Bitmap<bit_count> bitmap_and(Bitmap<bit_count>& a, Bitmap<bit_coun
     return res;
 }
 
-BITMAP_TEMPLATE_IMPL
-static inline void bitmap_print(const Bitmap<bit_count>& bitmap) {
+BITMAP_TEMPLATE
+inline void bitmap_print(const Bitmap<bit_count>& bitmap) {
     // printf("Bitmap [%u]: ", bit_count);
     
     for (u32 i = 0; i < bit_count; i++) {
@@ -180,5 +147,3 @@ static inline void bitmap_print(const Bitmap<bit_count>& bitmap) {
     }
     printf("\n");
 }
-
-#endif // BITMAP_IMPLEMENTATION

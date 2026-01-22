@@ -1,13 +1,15 @@
-#pragma once
+module;
 
 #include "basic.h"
 #include "allocator.h"
 #include "assert.h"
 
+export module queue;
+
 #define QUEUE_INITIAL_LENGTH 256
 #define QUEUE_REALLOC_STEP   128
 
-#define QUEUE_TEMPLATE template <typename T>
+#define QUEUE_TEMPLATE export template <typename T>
 
 QUEUE_TEMPLATE
 struct QueueIterator {
@@ -55,66 +57,10 @@ struct Queue {
 };
 
 
-
-// QUEUE_TEMPLATE
-// struct QueueRange {
-//     Queue<T> queue;
-
-//     QueueIterator<T> begin() {
-//         return QueueIterator(queue.data, queue.head, queue.length);
-//     }
-
-//     QueueIterator<T> end() {
-//         return QueueIterator(queue.data, queue.tail, queue.length);
-//     }
-// };
-
 QUEUE_TEMPLATE
-static inline
+inline
 void
-queue_make(Queue<T>* queue, u32 length = QUEUE_INITIAL_LENGTH, Allocator* allocator = Allocator_Persistent);
-
-QUEUE_TEMPLATE
-static inline
-Queue<T>
-queue_make(u32 length = QUEUE_INITIAL_LENGTH, Allocator* allocator = Allocator_Persistent);
-
-QUEUE_TEMPLATE
-static inline
-void
-queue_realloc(Queue<T>* queue, u32 length);
-
-QUEUE_TEMPLATE
-static inline
-void
-queue_free(Queue<T>* queue);
-
-QUEUE_TEMPLATE
-static inline
-void
-queue_enqueue(Queue<T>* queue, T elem);
-
-QUEUE_TEMPLATE
-static inline
-T
-queue_dequeue(Queue<T>* queue);
-
-QUEUE_TEMPLATE
-static inline
-void
-queue_clear(Queue<T>* queue);
-
-QUEUE_TEMPLATE
-static inline
-bool
-queue_contains(Queue<T>* queue, T elem);
-
-// Implementation
-
-QUEUE_TEMPLATE
-static inline
-void
-queue_make(Queue<T>* queue, u32 length, Allocator* allocator) {
+queue_make(Queue<T>* queue, u32 length = QUEUE_INITIAL_LENGTH, Allocator* allocator = Allocator_Persistent) {
     auto data = AllocatorAlloc(T, allocator, sizeof(T) * length);
     Assert(data, "Cannot allocate memory for queue data");
 
@@ -127,9 +73,9 @@ queue_make(Queue<T>* queue, u32 length, Allocator* allocator) {
 }
 
 QUEUE_TEMPLATE
-static inline
+inline
 Queue<T>
-queue_make(u32 length, Allocator* allocator) {
+queue_make(u32 length = QUEUE_INITIAL_LENGTH, Allocator* allocator = Allocator_Persistent) {
     Queue<T> queue{};
     
     auto data = AllocatorAlloc(T, allocator, sizeof(T) * length);
@@ -146,7 +92,7 @@ queue_make(u32 length, Allocator* allocator) {
 }
 
 QUEUE_TEMPLATE
-static inline
+inline
 void
 queue_realloc(Queue<T>* queue, u32 length) {
     Assert(queue->data, "Cannot resize uninitialized queue, initialize it with queue_make.");
@@ -189,7 +135,7 @@ queue_realloc(Queue<T>* queue, u32 length) {
 }
 
 QUEUE_TEMPLATE
-static inline
+inline
 void
 queue_free(Queue<T>* queue) {
     Assert(queue->data, "Cannot free uninitialized queue, initialize it with queue_make.");
@@ -199,7 +145,7 @@ queue_free(Queue<T>* queue) {
 }
 
 QUEUE_TEMPLATE
-static inline
+inline
 void
 queue_enqueue(Queue<T>* queue, T elem) {
     Assert(queue->data, "Cannot enqueue to uninitialized queue, initialize it with queue_make.");
@@ -213,7 +159,7 @@ queue_enqueue(Queue<T>* queue, T elem) {
 }
 
 QUEUE_TEMPLATE
-static inline
+inline
 T
 queue_dequeue(Queue<T>* queue) {
     Assert(queue->data, "Cannot dequeue from uninitialized queue, initialize it with queue_make.");
@@ -231,7 +177,7 @@ queue_dequeue(Queue<T>* queue) {
 }
 
 QUEUE_TEMPLATE
-static inline
+inline
 void
 queue_clear(Queue<T>* queue) {
     Assert(queue->data, "Cannot clear uninitialized queue, initialize it with queue_make.");
@@ -241,7 +187,7 @@ queue_clear(Queue<T>* queue) {
 }
 
 QUEUE_TEMPLATE
-static inline
+inline
 bool
 queue_contains(Queue<T>* queue, T elem) {
     Assert(queue->data, "Cannot search in uninitialized queue, initialize it with queue_make.");
